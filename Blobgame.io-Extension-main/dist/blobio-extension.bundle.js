@@ -3456,7 +3456,7 @@
     foodCulling: true,
     foodLimit: 90,
     foodCalcDelayMs: 0,
-    massCulling: true,
+    massCulling: false,
     massLimit: 30,
     massCalcDelayMs: 0
   });
@@ -3585,7 +3585,7 @@
     foodCulling: true,
     foodLimit: 90,
     foodCalcDelayMs: 0,
-    massCulling: true,
+    massCulling: false,
     massLimit: 30,
     massCalcDelayMs: 0
   };
@@ -3809,12 +3809,7 @@
     }
     state.frameCull.massSeen += 1;
     state.counters.massSeen += 1;
-    if (!state.settings.massCulling || state.frameCull.massSeen <= getCullBudget(state, "mass")) {
-      return false;
-    }
-    state.frameCull.massSkipped += 1;
-    state.counters.massSkipped += 1;
-    return true;
+    return false;
   }
   function createCullBudget(limit) {
     return {
@@ -13776,7 +13771,7 @@ html.${className} .blobio-watermark-extension::after {
       min: 0,
       max: 900,
       step: 1,
-      tooltip: "FPS-Gain: Medium[20-120]\nMaximum thrown-mass pellets rendered per frame when thrown mass culling is enabled. Lower numbers save more GPU work but hide more thrown mass."
+      tooltip: "Thrown-mass rendering is preserved so W-feed stays visible. This limit is kept for older settings but is not used by the safe renderer."
     },
     {
       key: "massCalcDelayMs",
@@ -13784,7 +13779,7 @@ html.${className} .blobio-watermark-extension::after {
       min: 0,
       max: 1e3,
       step: 25,
-      tooltip: "FPS-Gain: Medium[10-80]\nDelay before raising the thrown-mass render budget after the count refills. Lower budgets still apply quickly, so this mainly reduces fast throw/eat render churn."
+      tooltip: "Thrown-mass rendering is preserved so W-feed stays visible. This delay is kept for older settings but is not used by the safe renderer."
     },
     {
       key: "maxChatRows",
@@ -13888,7 +13883,7 @@ html.${className} .blobio-watermark-extension::after {
         this.createSliderRow(SLIDERS2.find((slider) => slider.key === "foodLimit")),
         this.createSliderRow(SLIDERS2.find((slider) => slider.key === "foodCalcDelayMs")),
         this.createSectionTitle("Thrown Mass"),
-        this.createCheckboxRow({ key: "massCulling", label: "T/M-Culling", tooltip: "FPS-Gain: Medium[20-120]\nSkips thrown-mass render work after the per-frame thrown-mass limit is reached." }),
+        this.createCheckboxRow({ key: "massCulling", label: "T/M-Culling", tooltip: "Thrown mass is preserved so W-feed stays visible. This setting is ignored by the safe renderer." }),
         this.createSliderRow(SLIDERS2.find((slider) => slider.key === "massLimit")),
         this.createSliderRow(SLIDERS2.find((slider) => slider.key === "massCalcDelayMs")),
         this.createSectionTitle("Chat"),

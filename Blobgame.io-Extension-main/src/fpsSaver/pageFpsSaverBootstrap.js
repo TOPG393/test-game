@@ -21,7 +21,7 @@ const FPS_SAVER_DEFAULT_SETTINGS = {
   foodCulling: true,
   foodLimit: 90,
   foodCalcDelayMs: 0,
-  massCulling: true,
+  massCulling: false,
   massLimit: 30,
   massCalcDelayMs: 0,
 };
@@ -276,14 +276,7 @@ function skipParticleWork(root, state, object) {
 
   state.frameCull.massSeen += 1;
   state.counters.massSeen += 1;
-
-  if (!state.settings.massCulling || state.frameCull.massSeen <= getCullBudget(state, 'mass')) {
-    return false;
-  }
-
-  state.frameCull.massSkipped += 1;
-  state.counters.massSkipped += 1;
-  return true;
+  return false;
 }
 
 function createCullBudget(limit) {

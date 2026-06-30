@@ -14,7 +14,7 @@ export const DEFAULT_FPS_SAVER_SETTINGS = Object.freeze({
   foodCulling: true,
   foodLimit: 90,
   foodCalcDelayMs: 0,
-  massCulling: true,
+  massCulling: false,
   massLimit: 30,
   massCalcDelayMs: 0,
 });
