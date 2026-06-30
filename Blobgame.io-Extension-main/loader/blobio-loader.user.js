@@ -6449,6 +6449,12 @@
       const safeMass = Math.max(0, Number(mass) || 0);
       const safeRawSize = Number(rawSize) || 0;
       const safeRenderSize = Number(renderSize) || safeRawSize;
+      const safeName = String(name || '').trim();
+      if (!safeName) {
+        state.counters.hiddenByThreshold += 1;
+        return null;
+      }
+  
       if (safeMass <= 0 || Math.max(safeRawSize, safeRenderSize) < MIN_RENDER_SIZE) {
         state.counters.hiddenByThreshold += 1;
         return null;
@@ -6469,7 +6475,7 @@
   
       const fitScale = Number(explicitFitScale) > 0
         ? Number(explicitFitScale)
-        : getFitScale(textEntry.text, name, nameScale, safeRenderSize);
+        : getFitScale(textEntry.text, safeName, nameScale, safeRenderSize);
       const primary = isPrimaryLabel(safeMass, safeRawSize, safeRenderSize, totalMass);
       let scale = clampNumber(fitScale * settings.textScale, 0.001, 1.4, settings.textScale);
   
@@ -6491,7 +6497,7 @@
   
       state.counters.labelsDrawn += 1;
       state.lastLabel = cloneLabelResult(cellId, safeMass, result);
-      rememberSample(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, name, Boolean(nameDrawn), result);
+      rememberSample(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, Boolean(nameDrawn), result);
       return result;
     }
   
