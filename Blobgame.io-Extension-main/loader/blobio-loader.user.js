@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.96
+// @version      0.1.97
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.94';
+  const VERSION = '0.1.95';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -622,7 +622,7 @@
     yOffset: 10,
     nameGap: 1.2,
     updateDelayMs: 3000,
-    playerArrows: true,
+    playerArrows: false,
   };
 
   function normalizeCellMassRuntimeSnapshot(value) {
@@ -6374,7 +6374,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.18';
+    const SCRIPT_VERSION = '0.1.19';
     const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
     const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
     const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -6386,7 +6386,7 @@
     const MAX_LABEL_HEIGHT = 0.32;
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2000;
-    const RADAR_PLAYER_MAX_AGE_MS = 250;
+    const RADAR_PLAYER_MAX_AGE_MS = 120;
     const PLAYER_ARROW_CANVAS_ID = 'blobio-visible-player-arrows';
     const PLAYER_ARROW_TOGGLE_ID = 'blobio-visible-player-toggle';
 
@@ -6779,44 +6779,21 @@
       const now = Date.now();
       const freshPlayers = getVisiblePlayers()
         .filter((player) => player.screenAt && now - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
-      const ownCells = freshPlayers.filter((player) => player.own);
       const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
-      const anchor = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
-      if (!anchor) {
-        state.lastRadar = {
-          at: now,
-          reason: 'no-anchor-cell-visible',
-          ownCells: ownCells.length,
-          players: players.length,
-        };
-        return;
-      }
-
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
-      const radarRadius = clampNumber(Math.min(rect.width, rect.height) * 0.16, 64, 130, 92);
-      const radarScale = getRadarScale(players, anchor, scaleX, scaleY, rect);
 
-      drawPlayerRadar(context, centerX, centerY, radarRadius);
       for (const player of players) {
         const targetX = clampNumber(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
         const targetY = clampNumber(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-        drawPlayerRadarDot(context, centerX, centerY, radarRadius, anchor.x, anchor.y, targetX, targetY, radarScale, player);
+        drawPlayerDirectionArrow(context, centerX, centerY, targetX, targetY, player);
       }
-      drawPlayerRadarCenter(context, centerX, centerY);
 
       state.lastRadar = {
         at: now,
+        mode: 'screen-arrows',
         centerX: roundNumber(centerX),
         centerY: roundNumber(centerY),
-        anchorX: roundNumber(anchor.x),
-        anchorY: roundNumber(anchor.y),
-        radius: roundNumber(radarRadius),
-        scale: roundNumber(radarScale),
-        ownCells: ownCells.length,
-        anchor: anchor.anchor,
-        anchorName: anchor.name,
-        anchorMass: anchor.mass,
         players: players.length,
       };
 
@@ -6991,6 +6968,52 @@
       context.restore();
     }
 
+    function drawPlayerDirectionArrow(context, centerX, centerY, targetX, targetY, player) {
+      const dx = targetX - centerX;
+      const dy = targetY - centerY;
+      const distance = Math.hypot(dx, dy);
+      if (!Number.isFinite(distance) || distance < 40) {
+        return;
+      }
+
+      const angle = Math.atan2(dy, dx);
+      const arrowDistance = Math.min(distance - 22, 190);
+      const arrowX = centerX + Math.cos(angle) * arrowDistance;
+      const arrowY = centerY + Math.sin(angle) * arrowDistance;
+      const size = clampNumber(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 4.6, 8, 18, 11);
+      const label = `${String(player.name || '').slice(0, 14)} ${formatMass(player.mass)}`.trim();
+
+      context.save();
+      context.translate(arrowX, arrowY);
+      context.rotate(angle);
+      context.shadowColor = 'rgba(0, 0, 0, 0.6)';
+      context.shadowBlur = 6;
+      context.lineJoin = 'round';
+      context.strokeStyle = 'rgba(0, 0, 0, 0.74)';
+      context.fillStyle = player.friend ? 'rgba(80, 220, 130, 0.95)' : 'rgba(255, 220, 86, 0.96)';
+      context.lineWidth = 3;
+      context.beginPath();
+      context.moveTo(size, 0);
+      context.lineTo(-size * 0.78, -size * 0.62);
+      context.lineTo(-size * 0.44, 0);
+      context.lineTo(-size * 0.78, size * 0.62);
+      context.closePath();
+      context.stroke();
+      context.fill();
+      context.restore();
+
+      context.save();
+      context.font = '600 12px Arial, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.lineWidth = 4;
+      context.strokeStyle = 'rgba(0, 0, 0, 0.72)';
+      context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      context.strokeText(label, arrowX, arrowY - size - 12);
+      context.fillText(label, arrowX, arrowY - size - 12);
+      context.restore();
+    }
+
     function ensurePlayerArrowOverlay(targetCanvas) {
       const doc = win.document;
       if (!state.arrowOverlay?.parentNode) {
@@ -7122,9 +7145,9 @@
 
       const enabled = Boolean(settings.playerArrows);
       button.dataset.enabled = String(enabled);
-      button.textContent = enabled ? 'Radar: ON' : 'Radar: OFF';
+      button.textContent = enabled ? 'Arrows: ON' : 'Arrows: OFF';
       button.setAttribute('aria-pressed', String(enabled));
-      button.setAttribute('aria-label', enabled ? 'Turn visible player radar off' : 'Turn visible player radar on');
+      button.setAttribute('aria-label', enabled ? 'Turn visible player arrows off' : 'Turn visible player arrows on');
     }
 
     function getDevicePixelRatio() {
@@ -7365,7 +7388,7 @@
         yOffset: 10,
         nameGap: 1.2,
         updateDelayMs: 3000,
-        playerArrows: true,
+        playerArrows: false,
       };
 
       return {

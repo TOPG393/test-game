@@ -82,7 +82,7 @@
     yOffset: 10,
     nameGap: 1.2,
     updateDelayMs: 3e3,
-    playerArrows: true
+    playerArrows: false
   });
   function readCellMassSettings(storage, document = globalThis.document) {
     const storedSnapshot = parseCellMassSnapshot(storage?.getItem?.(CELL_MASS_SNAPSHOT_KEY));
@@ -192,7 +192,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.18";
+    const SCRIPT_VERSION = "0.1.19";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -204,7 +204,7 @@
     const MAX_LABEL_HEIGHT = 0.32;
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2e3;
-    const RADAR_PLAYER_MAX_AGE_MS = 250;
+    const RADAR_PLAYER_MAX_AGE_MS = 120;
     const PLAYER_ARROW_CANVAS_ID = "blobio-visible-player-arrows";
     const PLAYER_ARROW_TOGGLE_ID = "blobio-visible-player-toggle";
     let settings = normalizeSettings2(initialSettings);
@@ -541,41 +541,19 @@
       const scaleY = rect.height / canvasHeight;
       const now2 = Date.now();
       const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
-      const ownCells = freshPlayers.filter((player) => player.own);
       const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
-      const anchor = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
-      if (!anchor) {
-        state.lastRadar = {
-          at: now2,
-          reason: "no-anchor-cell-visible",
-          ownCells: ownCells.length,
-          players: players.length
-        };
-        return;
-      }
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
-      const radarRadius = clampNumber2(Math.min(rect.width, rect.height) * 0.16, 64, 130, 92);
-      const radarScale = getRadarScale(players, anchor, scaleX, scaleY, rect);
-      drawPlayerRadar(context, centerX, centerY, radarRadius);
       for (const player of players) {
         const targetX = clampNumber2(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
         const targetY = clampNumber2(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-        drawPlayerRadarDot(context, centerX, centerY, radarRadius, anchor.x, anchor.y, targetX, targetY, radarScale, player);
+        drawPlayerDirectionArrow(context, centerX, centerY, targetX, targetY, player);
       }
-      drawPlayerRadarCenter(context, centerX, centerY);
       state.lastRadar = {
         at: now2,
+        mode: "screen-arrows",
         centerX: roundNumber(centerX),
         centerY: roundNumber(centerY),
-        anchorX: roundNumber(anchor.x),
-        anchorY: roundNumber(anchor.y),
-        radius: roundNumber(radarRadius),
-        scale: roundNumber(radarScale),
-        ownCells: ownCells.length,
-        anchor: anchor.anchor,
-        anchorName: anchor.name,
-        anchorMass: anchor.mass,
         players: players.length
       };
       if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
@@ -727,6 +705,48 @@
       context.fillText(label, dotX, dotY - size - 11);
       context.restore();
     }
+    function drawPlayerDirectionArrow(context, centerX, centerY, targetX, targetY, player) {
+      const dx = targetX - centerX;
+      const dy = targetY - centerY;
+      const distance = Math.hypot(dx, dy);
+      if (!Number.isFinite(distance) || distance < 40) {
+        return;
+      }
+      const angle = Math.atan2(dy, dx);
+      const arrowDistance = Math.min(distance - 22, 190);
+      const arrowX = centerX + Math.cos(angle) * arrowDistance;
+      const arrowY = centerY + Math.sin(angle) * arrowDistance;
+      const size = clampNumber2(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 4.6, 8, 18, 11);
+      const label = `${String(player.name || "").slice(0, 14)} ${formatMass(player.mass)}`.trim();
+      context.save();
+      context.translate(arrowX, arrowY);
+      context.rotate(angle);
+      context.shadowColor = "rgba(0, 0, 0, 0.6)";
+      context.shadowBlur = 6;
+      context.lineJoin = "round";
+      context.strokeStyle = "rgba(0, 0, 0, 0.74)";
+      context.fillStyle = player.friend ? "rgba(80, 220, 130, 0.95)" : "rgba(255, 220, 86, 0.96)";
+      context.lineWidth = 3;
+      context.beginPath();
+      context.moveTo(size, 0);
+      context.lineTo(-size * 0.78, -size * 0.62);
+      context.lineTo(-size * 0.44, 0);
+      context.lineTo(-size * 0.78, size * 0.62);
+      context.closePath();
+      context.stroke();
+      context.fill();
+      context.restore();
+      context.save();
+      context.font = "600 12px Arial, sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.lineWidth = 4;
+      context.strokeStyle = "rgba(0, 0, 0, 0.72)";
+      context.fillStyle = "rgba(255, 255, 255, 0.95)";
+      context.strokeText(label, arrowX, arrowY - size - 12);
+      context.fillText(label, arrowX, arrowY - size - 12);
+      context.restore();
+    }
     function ensurePlayerArrowOverlay(targetCanvas) {
       const doc = win.document;
       if (!state.arrowOverlay?.parentNode) {
@@ -846,9 +866,9 @@
       }
       const enabled = Boolean(settings.playerArrows);
       button.dataset.enabled = String(enabled);
-      button.textContent = enabled ? "Radar: ON" : "Radar: OFF";
+      button.textContent = enabled ? "Arrows: ON" : "Arrows: OFF";
       button.setAttribute("aria-pressed", String(enabled));
-      button.setAttribute("aria-label", enabled ? "Turn visible player radar off" : "Turn visible player radar on");
+      button.setAttribute("aria-label", enabled ? "Turn visible player arrows off" : "Turn visible player arrows on");
     }
     function getDevicePixelRatio() {
       return Math.max(1, Math.min(3, Number(win.devicePixelRatio) || 1));
@@ -1050,7 +1070,7 @@
         yOffset: 10,
         nameGap: 1.2,
         updateDelayMs: 3e3,
-        playerArrows: true
+        playerArrows: false
       };
       return {
         enabled: source.enabled === void 0 ? defaults.enabled : Boolean(source.enabled),
@@ -15873,7 +15893,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.94";
+  var DEFAULT_EXTENSION_VERSION = "0.1.95";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21508,7 +21528,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.94";
+  var EXTENSION_VERSION = "0.1.95";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,

@@ -19,7 +19,7 @@ export const DEFAULT_CELL_MASS_SETTINGS = Object.freeze({
   yOffset: 10,
   nameGap: 1.2,
   updateDelayMs: 3000,
-  playerArrows: true,
+  playerArrows: false,
 });
 
 export function readCellMassSettings(storage, document = globalThis.document) {
