@@ -2413,6 +2413,7 @@
       mode: 'safe-uncapped',
       startupDelayMs: 5000,
       yieldEveryFrames: 120,
+      maxFps: 240,
       preserveCameraZoom: true,
       cameraDeltaFloor: 0.003000000026077032,
       minCameraDeltaSeconds: 0.0001,
@@ -2467,6 +2468,7 @@
     let uncappedFramesSinceYield = 0;
     let insideFrameCallback = false;
     let lastFrameTime = 0;
+    let lastUncappedFrameTime = 0;
     let currentFrameDeltaSeconds = 1 / 240;
     let messageChannel = null;
 
@@ -2535,6 +2537,7 @@
       }
 
       const timestamp = beginFrame(now());
+      lastUncappedFrameTime = timestamp;
       try {
         state.callbacksRun += 1;
         frame.callback(timestamp);
@@ -2556,7 +2559,17 @@
       state.pendingFrames = pendingFrames.size;
 
       if (messageChannel) {
-        messageChannel.port2.postMessage(id);
+        const maxFps = Math.max(30, Number(config.maxFps) || 240);
+        const minFrameIntervalMs = 1000 / maxFps;
+        const waitMs = Math.max(0, minFrameIntervalMs - (now() - lastUncappedFrameTime));
+        if (waitMs > 0) {
+          frame.timer = native.setTimeout(() => {
+            frame.timer = null;
+            messageChannel.port2.postMessage(id);
+          }, waitMs);
+        } else {
+          messageChannel.port2.postMessage(id);
+        }
       } else {
         frame.timer = native.setTimeout(() => runFrame(id), 0);
       }
@@ -2786,6 +2799,7 @@
       mode: config.mode,
       startupDelayMs: config.startupDelayMs,
       yieldEveryFrames: config.yieldEveryFrames,
+      maxFps: config.maxFps,
       preserveCameraZoom: config.preserveCameraZoom,
       keepVisible: config.keepVisible,
       scheduler: state.scheduler,
@@ -2804,6 +2818,7 @@
       `mode=${config.mode}`,
       `startupDelayMs=${config.startupDelayMs}`,
       `yieldEveryFrames=${config.yieldEveryFrames}`,
+      `maxFps=${config.maxFps}`,
       `preserveCameraZoom=${config.preserveCameraZoom}`,
       `scheduler=${state.scheduler}`,
     );
