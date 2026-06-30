@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.86
+// @version      0.1.87
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.84';
+  const VERSION = '0.1.85';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -6372,7 +6372,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.8';
+    const SCRIPT_VERSION = '0.1.9';
     const CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = 'BlobioCellMassDraw';
     const PATCH_MARKER = 'BlobioCellMassDraw';
@@ -6381,9 +6381,11 @@
     const MAX_LABEL_HEIGHT = 0.32;
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2000;
+    const PLAYER_ARROW_CANVAS_ID = 'blobio-visible-player-arrows';
 
     let settings = normalizeSettings(initialSettings);
     let lastCacheSweep = 0;
+    let arrowFrame = 0;
 
     const labelCache = new Map();
     const visiblePlayers = new Map();
@@ -6410,6 +6412,7 @@
       samples: [],
       lastLabel: null,
       lastDrawCapture: null,
+      arrowOverlay: null,
       errors: [],
     };
 
@@ -6423,6 +6426,8 @@
     win.blobioCellMassDebug = debugReport;
     win.BlobioVisiblePlayers = getVisiblePlayers;
     win.__BlobioVisiblePlayers = getVisiblePlayers;
+    win.BlobioPlayerArrows = setPlayerArrowsEnabled;
+    win.__BlobioPlayerArrows = setPlayerArrowsEnabled;
     win.__blobioCellMassCaptureDraw = captureDrawState;
 
     if (win.__BLOBIO_CELL_MASS_TEST__) {
@@ -6438,6 +6443,7 @@
     }
 
     installGameScriptPatch();
+    installPlayerArrowOverlay();
     return true;
 
     function refreshSettings(nextSettings = {}) {
@@ -6526,7 +6532,11 @@
     function rememberVisiblePlayer(cellId, mass, rawSize, renderSize, cellSize, name, worldX, worldY, cellType) {
       const key = String(cellId ?? `${name}:${Math.round(Number(worldX) || 0)}:${Math.round(Number(worldY) || 0)}`);
       const now = Date.now();
+      const previous = visiblePlayers.get(key);
+      const screenX = roundNumber(worldX);
+      const screenY = roundNumber(worldY);
       visiblePlayers.set(key, {
+        ...(previous || {}),
         at: now,
         cellId: String(cellId ?? ''),
         name: String(name || '').slice(0, 48),
@@ -6536,6 +6546,9 @@
         cellSize: roundNumber(cellSize),
         x: roundNumber(worldX),
         y: roundNumber(worldY),
+        screenAt: now,
+        screenX,
+        screenY,
         type: Number.isFinite(Number(cellType)) ? Number(cellType) : null,
       });
       state.counters.visiblePlayerCells += 1;
@@ -6554,6 +6567,18 @@
       pruneVisiblePlayers();
       return [...visiblePlayers.values()]
         .sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
+    }
+
+    function setPlayerArrowsEnabled(enabled = true) {
+      settings = normalizeSettings({
+        ...settings,
+        playerArrows: Boolean(enabled),
+      });
+      state.settings = settings;
+      if (settings.playerArrows) {
+        installPlayerArrowOverlay();
+      }
+      return settings.playerArrows;
     }
 
     function readMassText(cellId, mass, now) {
@@ -6660,6 +6685,7 @@
 
     function captureDrawState(cellId, label, nativeColor, x, y) {
       const native = cloneRendererColor(nativeColor);
+      rememberVisiblePlayerScreen(cellId, x, y);
       state.lastDrawCapture = {
         at: Date.now(),
         cellId: String(cellId ?? ''),
@@ -6672,6 +6698,211 @@
         nativeColor: native,
       };
       return state.lastDrawCapture;
+    }
+
+    function rememberVisiblePlayerScreen(cellId, x, y) {
+      const key = String(cellId ?? '');
+      const player = visiblePlayers.get(key);
+      if (!player) {
+        return;
+      }
+
+      player.screenAt = Date.now();
+      player.screenX = roundNumber(x);
+      player.screenY = roundNumber(y);
+    }
+
+    function installPlayerArrowOverlay() {
+      if (arrowFrame) {
+        return;
+      }
+
+      if (!win.document?.body) {
+        win.setTimeout?.(installPlayerArrowOverlay, 250);
+        return;
+      }
+
+      installPlayerArrowStyle();
+      const draw = () => {
+        arrowFrame = win.requestAnimationFrame?.(draw) || 0;
+        try {
+          drawPlayerArrows();
+        } catch (error) {
+          rememberError(`Player arrows failed: ${getErrorMessage(error)}`);
+        }
+      };
+      draw();
+    }
+
+    function drawPlayerArrows() {
+      const doc = win.document;
+      const targetCanvas = findGameCanvas();
+      if (!targetCanvas || !settings.enabled || !settings.playerArrows) {
+        clearPlayerArrowOverlay();
+        return;
+      }
+
+      const overlay = ensurePlayerArrowOverlay(targetCanvas);
+      const context = overlay?.getContext?.('2d');
+      if (!overlay || !context) {
+        return;
+      }
+
+      const rect = targetCanvas.getBoundingClientRect?.();
+      if (!rect || rect.width <= 1 || rect.height <= 1) {
+        clearPlayerArrowOverlay();
+        return;
+      }
+
+      alignPlayerArrowOverlay(overlay, rect);
+      const dpr = getDevicePixelRatio();
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.clearRect(0, 0, rect.width, rect.height);
+
+      const canvasWidth = Number(targetCanvas.width) || rect.width;
+      const canvasHeight = Number(targetCanvas.height) || rect.height;
+      const scaleX = rect.width / canvasWidth;
+      const scaleY = rect.height / canvasHeight;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const now = Date.now();
+      const players = getVisiblePlayers()
+        .filter((player) => player.screenAt && now - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS)
+        .slice(0, 12);
+
+      for (const player of players) {
+        const targetX = clampNumber(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
+        const targetY = clampNumber(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
+        drawPlayerArrow(context, centerX, centerY, targetX, targetY, player);
+      }
+
+      if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
+        state.arrowOverlay = null;
+      }
+    }
+
+    function drawPlayerArrow(context, centerX, centerY, targetX, targetY, player) {
+      const angle = Math.atan2(targetY - centerY, targetX - centerX);
+      const distance = Math.hypot(targetX - centerX, targetY - centerY);
+      if (!Number.isFinite(distance) || distance < 48) {
+        return;
+      }
+
+      const arrowX = centerX + Math.cos(angle) * Math.min(distance - 24, 180);
+      const arrowY = centerY + Math.sin(angle) * Math.min(distance - 24, 180);
+      const size = clampNumber(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 2.8, 9, 18, 12);
+      const label = `${String(player.name || '').slice(0, 14)} ${formatMass(player.mass)}`.trim();
+
+      context.save();
+      context.translate(arrowX, arrowY);
+      context.rotate(angle);
+      context.shadowColor = 'rgba(0, 0, 0, 0.55)';
+      context.shadowBlur = 5;
+      context.lineJoin = 'round';
+      context.strokeStyle = 'rgba(0, 0, 0, 0.72)';
+      context.fillStyle = 'rgba(255, 220, 86, 0.95)';
+      context.lineWidth = 3;
+      context.beginPath();
+      context.moveTo(size, 0);
+      context.lineTo(-size * 0.72, -size * 0.58);
+      context.lineTo(-size * 0.42, 0);
+      context.lineTo(-size * 0.72, size * 0.58);
+      context.closePath();
+      context.stroke();
+      context.fill();
+      context.restore();
+
+      context.save();
+      context.font = '600 12px Arial, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.lineWidth = 4;
+      context.strokeStyle = 'rgba(0, 0, 0, 0.68)';
+      context.fillStyle = 'rgba(255, 255, 255, 0.94)';
+      context.strokeText(label, arrowX, arrowY - size - 12);
+      context.fillText(label, arrowX, arrowY - size - 12);
+      context.restore();
+    }
+
+    function ensurePlayerArrowOverlay(targetCanvas) {
+      const doc = win.document;
+      if (!state.arrowOverlay?.parentNode) {
+        const overlay = doc.createElement('canvas');
+        overlay.id = PLAYER_ARROW_CANVAS_ID;
+        overlay.setAttribute('aria-hidden', 'true');
+        (doc.body || doc.documentElement).appendChild(overlay);
+        state.arrowOverlay = overlay;
+      }
+
+      if (state.arrowOverlay === targetCanvas) {
+        state.arrowOverlay = null;
+        return null;
+      }
+
+      return state.arrowOverlay;
+    }
+
+    function alignPlayerArrowOverlay(overlay, rect) {
+      const dpr = getDevicePixelRatio();
+      const width = Math.max(1, Math.round(rect.width * dpr));
+      const height = Math.max(1, Math.round(rect.height * dpr));
+      if (overlay.width !== width || overlay.height !== height) {
+        overlay.width = width;
+        overlay.height = height;
+      }
+      overlay.style.left = `${Math.round(rect.left)}px`;
+      overlay.style.top = `${Math.round(rect.top)}px`;
+      overlay.style.width = `${Math.round(rect.width)}px`;
+      overlay.style.height = `${Math.round(rect.height)}px`;
+    }
+
+    function clearPlayerArrowOverlay() {
+      const overlay = state.arrowOverlay;
+      const context = overlay?.getContext?.('2d');
+      if (overlay && context) {
+        context.clearRect(0, 0, overlay.width, overlay.height);
+      }
+    }
+
+    function findGameCanvas() {
+      const canvases = Array.from(win.document?.querySelectorAll?.('canvas') || []);
+      let best = null;
+      let bestArea = 0;
+      for (const canvas of canvases) {
+        if (canvas.id === PLAYER_ARROW_CANVAS_ID) {
+          continue;
+        }
+        const rect = canvas.getBoundingClientRect?.();
+        const area = Math.max(0, Number(rect?.width) || 0) * Math.max(0, Number(rect?.height) || 0);
+        if (area > bestArea) {
+          best = canvas;
+          bestArea = area;
+        }
+      }
+      return best;
+    }
+
+    function installPlayerArrowStyle() {
+      const doc = win.document;
+      if (!doc || doc.getElementById?.('blobio-visible-player-arrow-style')) {
+        return;
+      }
+
+      const style = doc.createElement('style');
+      style.id = 'blobio-visible-player-arrow-style';
+      style.textContent = `
+  #${PLAYER_ARROW_CANVAS_ID} {
+    position: fixed;
+    z-index: 2147483000;
+    pointer-events: none;
+    opacity: 0.96;
+  }
+  `;
+      (doc.head || doc.documentElement).appendChild(style);
+    }
+
+    function getDevicePixelRatio() {
+      return Math.max(1, Math.min(3, Number(win.devicePixelRatio) || 1));
     }
 
     function sweepLabelCache(now) {
@@ -6907,6 +7138,7 @@
         yOffset: 10,
         nameGap: 1.2,
         updateDelayMs: 3000,
+        playerArrows: true,
       };
 
       return {
@@ -6919,6 +7151,7 @@
         yOffset: clampNumber(source.yOffset, -120, 120, defaults.yOffset),
         nameGap: clampNumber(source.nameGap, 0.1, 3, defaults.nameGap),
         updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 10000, defaults.updateDelayMs)),
+        playerArrows: source.playerArrows === undefined ? defaults.playerArrows : Boolean(source.playerArrows),
       };
     }
 
