@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.98
+// @version      0.1.99
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.96';
+  const VERSION = '0.1.97';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -6374,7 +6374,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.20';
+    const SCRIPT_VERSION = '0.1.21';
     const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
     const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
     const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -6472,7 +6472,7 @@
       return settings;
     }
 
-    function drawCellMassLabel(cellId, mass, rawSize, renderSize, cellSize, name, nameDrawn, nameScale, explicitFitScale, totalMass, worldX, worldY, cellType, isOwnCell, isFriendCell) {
+    function drawCellMassLabel(cellId, mass, rawSize, renderSize, cellSize, name, nameDrawn, nameScale, explicitFitScale, totalMass, worldX, worldY, cellType, isOwnCell, isFriendCell, projectionMatrix) {
       state.counters.drawHookCalls += 1;
 
       if (!settings.enabled) {
@@ -6494,7 +6494,8 @@
         return null;
       }
 
-      rememberVisiblePlayer(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, worldX, worldY, cellType, isOwnCell, isFriendCell);
+      const drawInfo = getCellDrawInfo(worldX, worldY, Math.max(safeRenderSize, safeRawSize) / 2, cellSize, projectionMatrix);
+      rememberVisiblePlayer(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, worldX, worldY, cellType, isOwnCell, isFriendCell, drawInfo);
 
       const autoMinMass = settings.smartRendering ? getAutoMinMass(totalMass) : 0;
       if (autoMinMass > 0 && safeMass <= autoMinMass) {
@@ -6537,12 +6538,13 @@
       return result;
     }
 
-    function rememberVisiblePlayer(cellId, mass, rawSize, renderSize, cellSize, name, worldX, worldY, cellType, isOwnCell, isFriendCell) {
+    function rememberVisiblePlayer(cellId, mass, rawSize, renderSize, cellSize, name, worldX, worldY, cellType, isOwnCell, isFriendCell, drawInfo) {
       const key = String(cellId ?? `${name}:${Math.round(Number(worldX) || 0)}:${Math.round(Number(worldY) || 0)}`);
       const now = Date.now();
       const previous = visiblePlayers.get(key);
-      const screenX = roundNumber(worldX);
-      const screenY = roundNumber(worldY);
+      const projected = drawInfo?.projected ? drawInfo : null;
+      const screenX = projected ? roundNumber(projected.x) : roundNumber(previous?.screenX ?? worldX);
+      const screenY = projected ? roundNumber(projected.y) : roundNumber(previous?.screenY ?? worldY);
       visiblePlayers.set(key, {
         ...(previous || {}),
         at: now,
@@ -6557,6 +6559,8 @@
         screenAt: now,
         screenX,
         screenY,
+        projected: Boolean(projected),
+        projectionMode: projected ? 'matrix' : 'world',
         type: Number.isFinite(Number(cellType)) ? Number(cellType) : null,
         own: Boolean(isOwnCell),
         friend: Boolean(isFriendCell),
@@ -6719,9 +6723,9 @@
         return;
       }
 
-      player.screenAt = Date.now();
-      player.screenX = roundNumber(x);
-      player.screenY = roundNumber(y);
+      player.labelAt = Date.now();
+      player.labelX = roundNumber(x);
+      player.labelY = roundNumber(y);
     }
 
     function installPlayerArrowOverlay() {
@@ -6772,13 +6776,10 @@
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, rect.width, rect.height);
 
-      const canvasWidth = Number(targetCanvas.width) || rect.width;
-      const canvasHeight = Number(targetCanvas.height) || rect.height;
-      const scaleX = rect.width / canvasWidth;
-      const scaleY = rect.height / canvasHeight;
       const now = Date.now();
       const freshPlayers = getVisiblePlayers()
         .filter((player) => player.screenAt && now - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
+      const anchor = getOwnRadarAnchor(freshPlayers, rect);
       const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
@@ -6786,9 +6787,8 @@
 
       drawPlayerArrowRing(context, centerX, centerY, arrowRadius);
       for (const player of players) {
-        const targetX = clampNumber(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
-        const targetY = clampNumber(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-        drawPlayerDirectionArrow(context, centerX, centerY, arrowRadius, targetX, targetY, player);
+        const delta = getPlayerDirectionDelta(player, anchor, rect);
+        drawPlayerDirectionArrow(context, centerX, centerY, arrowRadius, delta.x, delta.y, player);
       }
 
       state.lastRadar = {
@@ -6797,6 +6797,7 @@
         centerX: roundNumber(centerX),
         centerY: roundNumber(centerY),
         radius: roundNumber(arrowRadius),
+        anchor,
         players: players.length,
       };
 
@@ -6805,21 +6806,37 @@
       }
     }
 
-    function getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect) {
+    function getOwnRadarAnchor(freshPlayers, rect) {
+      const ownCells = freshPlayers.filter((player) => player.own);
       const anchorCells = ownCells.length ? ownCells : chooseFallbackAnchorCells(freshPlayers);
       if (!anchorCells.length) {
-        return null;
+        return {
+          x: rect.width / 2,
+          y: rect.height / 2,
+          worldX: null,
+          worldY: null,
+          projected: true,
+          anchor: 'screen-center',
+        };
       }
 
       let totalMass = 0;
       let weightedX = 0;
       let weightedY = 0;
+      let weightedWorldX = 0;
+      let weightedWorldY = 0;
+      let projectedWeight = 0;
       let biggest = anchorCells[0] || null;
       for (const player of anchorCells) {
         const weight = Math.max(1, Number(player.mass) || 1);
         totalMass += weight;
-        weightedX += Number(player.screenX) * scaleX * weight;
-        weightedY += Number(player.screenY) * scaleY * weight;
+        weightedX += Number(player.screenX) * weight;
+        weightedY += Number(player.screenY) * weight;
+        weightedWorldX += Number(player.x) * weight;
+        weightedWorldY += Number(player.y) * weight;
+        if (player.projected) {
+          projectedWeight += weight;
+        }
         if ((Number(player.mass) || 0) > (Number(biggest?.mass) || 0)) {
           biggest = player;
         }
@@ -6828,6 +6845,9 @@
       return {
         x: clampNumber(weightedX / totalMass, 24, rect.width - 24, rect.width / 2),
         y: clampNumber(weightedY / totalMass, 24, rect.height - 24, rect.height / 2),
+        worldX: roundNumber(weightedWorldX / totalMass),
+        worldY: roundNumber(weightedWorldY / totalMass),
+        projected: projectedWeight > 0,
         anchor: ownCells.length ? 'game-own-cell' : 'largest-visible-cell',
         name: String(biggest?.name || ''),
         mass: Math.round(Number(biggest?.mass) || 0),
@@ -6858,6 +6878,10 @@
             splitCells: 1,
             weightedScreenX: Number(player.screenX) * mass,
             weightedScreenY: Number(player.screenY) * mass,
+            weightedWorldX: Number(player.x) * mass,
+            weightedWorldY: Number(player.y) * mass,
+            projectedWeight: player.projected ? mass : 0,
+            primaryMass: mass,
             totalWeight: mass,
           });
           continue;
@@ -6868,6 +6892,11 @@
         existing.friend = existing.friend || player.friend;
         existing.weightedScreenX += Number(player.screenX) * mass;
         existing.weightedScreenY += Number(player.screenY) * mass;
+        existing.weightedWorldX += Number(player.x) * mass;
+        existing.weightedWorldY += Number(player.y) * mass;
+        if (player.projected) {
+          existing.projectedWeight += mass;
+        }
         existing.totalWeight += mass;
         if (mass > (Number(existing.primaryMass) || 0)) {
           existing.cellId = player.cellId;
@@ -6881,94 +6910,32 @@
           mass: Math.round(player.mass),
           screenX: player.weightedScreenX / player.totalWeight,
           screenY: player.weightedScreenY / player.totalWeight,
+          x: player.weightedWorldX / player.totalWeight,
+          y: player.weightedWorldY / player.totalWeight,
+          projected: player.projectedWeight > 0,
         }))
         .sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
     }
 
-    function getRadarScale(players, anchor, scaleX, scaleY, rect) {
-      let farthest = 0;
-      for (const player of players) {
-        if (player.own) {
-          continue;
-        }
-
-        const targetX = Number(player.screenX) * scaleX;
-        const targetY = Number(player.screenY) * scaleY;
-        const distance = Math.hypot(targetX - anchor.x, targetY - anchor.y);
-        if (Number.isFinite(distance)) {
-          farthest = Math.max(farthest, distance);
-        }
+    function getPlayerDirectionDelta(player, anchor, rect) {
+      if (player.projected && anchor.projected) {
+        return {
+          x: Number(player.screenX) - Number(anchor.x),
+          y: Number(player.screenY) - Number(anchor.y),
+        };
       }
 
-      const visibleRange = Math.min(rect.width, rect.height) * 0.52;
-      return Math.max(120, Math.min(Math.max(farthest, visibleRange), visibleRange * 1.35));
-    }
-
-    function drawPlayerRadar(context, centerX, centerY, radius) {
-      context.save();
-      context.lineWidth = 2;
-      context.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-      context.fillStyle = 'rgba(0, 0, 0, 0.16)';
-      context.shadowColor = 'rgba(0, 0, 0, 0.45)';
-      context.shadowBlur = 8;
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      context.fill();
-      context.stroke();
-      context.restore();
-    }
-
-    function drawPlayerRadarCenter(context, centerX, centerY) {
-      context.save();
-      context.shadowColor = 'rgba(0, 0, 0, 0.55)';
-      context.shadowBlur = 8;
-      context.beginPath();
-      context.arc(centerX, centerY, 8, 0, Math.PI * 2);
-      context.fillStyle = 'rgba(255, 48, 48, 0.98)';
-      context.fill();
-      context.lineWidth = 3;
-      context.strokeStyle = 'rgba(255, 255, 255, 0.92)';
-      context.stroke();
-      context.restore();
-    }
-
-    function drawPlayerRadarDot(context, centerX, centerY, radius, anchorX, anchorY, targetX, targetY, radarScale, player) {
-      const dx = targetX - anchorX;
-      const dy = targetY - anchorY;
-      const distance = Math.hypot(dx, dy);
-      if (!Number.isFinite(distance) || distance < 32) {
-        return;
+      if (Number.isFinite(Number(anchor.worldX)) && Number.isFinite(Number(anchor.worldY))) {
+        return {
+          x: Number(player.x) - Number(anchor.worldX),
+          y: Number(player.y) - Number(anchor.worldY),
+        };
       }
 
-      const ratio = clampNumber(distance / radarScale, 0.16, 1, 0.16);
-      const dotDistance = Math.min(radius - 12, ratio * (radius - 12));
-      const dotX = centerX + (dx / distance) * dotDistance;
-      const dotY = centerY + (dy / distance) * dotDistance;
-      const size = clampNumber(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 5, 5, 12, 7);
-      const label = `${String(player.name || '').slice(0, 14)} ${formatMass(player.mass)}`.trim();
-
-      context.save();
-      context.shadowColor = 'rgba(0, 0, 0, 0.55)';
-      context.shadowBlur = 6;
-      context.strokeStyle = 'rgba(0, 0, 0, 0.7)';
-      context.fillStyle = player.friend ? 'rgba(80, 220, 130, 0.95)' : 'rgba(255, 220, 86, 0.95)';
-      context.lineWidth = 2;
-      context.beginPath();
-      context.arc(dotX, dotY, size, 0, Math.PI * 2);
-      context.stroke();
-      context.fill();
-      context.restore();
-
-      context.save();
-      context.font = '600 12px Arial, sans-serif';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.lineWidth = 4;
-      context.strokeStyle = 'rgba(0, 0, 0, 0.68)';
-      context.fillStyle = 'rgba(255, 255, 255, 0.94)';
-      context.strokeText(label, dotX, dotY - size - 11);
-      context.fillText(label, dotX, dotY - size - 11);
-      context.restore();
+      return {
+        x: Number(player.screenX) - rect.width / 2,
+        y: Number(player.screenY) - rect.height / 2,
+      };
     }
 
     function drawPlayerArrowRing(context, centerX, centerY, radius) {
@@ -6989,9 +6956,7 @@
       context.restore();
     }
 
-    function drawPlayerDirectionArrow(context, centerX, centerY, radius, targetX, targetY, player) {
-      const dx = targetX - centerX;
-      const dy = targetY - centerY;
+    function drawPlayerDirectionArrow(context, centerX, centerY, radius, dx, dy, player) {
       const distance = Math.hypot(dx, dy);
       if (!Number.isFinite(distance) || distance < 40) {
         return;
@@ -7090,6 +7055,72 @@
         }
       }
       return best;
+    }
+
+    function getCellDrawInfo(x, y, radius, cellSize, projectionMatrix) {
+      if (!Number.isFinite(Number(x)) || !Number.isFinite(Number(y))) {
+        return null;
+      }
+
+      const projected = projectWorldPoint(Number(x), Number(y), projectionMatrix);
+      if (projected) {
+        const measureRadius = Math.max(0, Number(radius) || Number(cellSize) / 2 || 0);
+        const right = measureRadius > 0 ? projectWorldPoint(Number(x) + measureRadius, Number(y), projectionMatrix) : null;
+        const top = measureRadius > 0 ? projectWorldPoint(Number(x), Number(y) + measureRadius, projectionMatrix) : null;
+        const projectedRadius = Math.max(
+          right ? Math.abs(right.x - projected.x) : 0,
+          top ? Math.abs(top.y - projected.y) : 0,
+        );
+        return {
+          x: projected.x,
+          y: projected.y,
+          size: Math.max(1, projectedRadius * 2 || 42),
+          projected: true,
+        };
+      }
+
+      return {
+        x: Number(x),
+        y: Number(y),
+        size: Math.max(1, Number(radius) * 2 || Number(cellSize) || 42),
+        projected: false,
+      };
+    }
+
+    function projectWorldPoint(x, y, projectionMatrix) {
+      const matrix = getMatrixValues(projectionMatrix);
+      const viewport = getGameViewport();
+      if (!matrix || viewport.width <= 0 || viewport.height <= 0) {
+        return null;
+      }
+
+      const clipX = matrix[0] * x + matrix[4] * y + matrix[12];
+      const clipY = matrix[1] * x + matrix[5] * y + matrix[13];
+      const clipW = matrix[3] * x + matrix[7] * y + matrix[15];
+      const w = Number.isFinite(clipW) && Math.abs(clipW) > 0.00001 ? clipW : 1;
+      const ndcX = clipX / w;
+      const ndcY = clipY / w;
+      if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY)) {
+        return null;
+      }
+
+      return {
+        x: (ndcX + 1) * 0.5 * viewport.width,
+        y: (1 - ndcY) * 0.5 * viewport.height,
+      };
+    }
+
+    function getMatrixValues(value) {
+      const matrix = value?.a || value;
+      return matrix && typeof matrix.length === 'number' && matrix.length >= 16 ? matrix : null;
+    }
+
+    function getGameViewport() {
+      const rect = findGameCanvas()?.getBoundingClientRect?.();
+      return {
+        width: Number(rect?.width) || Number(win.innerWidth) || 0,
+        height: Number(rect?.height) || Number(win.innerHeight) || 0,
+      };
     }
 
     function installPlayerArrowStyle() {
@@ -7301,7 +7332,7 @@
       const drawPatch = [
         'Gm(a.i,a.c,g.B,b,c);d=true}}',
         'if($wnd.BlobioCellMassDraw&&(!g.c||(g.c.M!=2&&g.c.M!=3&&g.c.M!=4&&g.c.M!=10))){',
-        'h=$wnd.BlobioCellMassDraw(g.n,g.w*g.w/100,g.w,g.M,g.N,g.B,d,d?f:0,0,qxe.g/100,g.R,g.S,g.c?g.c.M:-1,g.u,g.r);',
+        'h=$wnd.BlobioCellMassDraw(g.n,g.w*g.w/100,g.w,g.M,g.N,g.B,d,d?f:0,0,qxe.g/100,g.R,g.S,g.c?g.c.M:-1,g.u,g.r,a.c&&a.c.g&&a.c.g.a);',
         'if(h&&h.text){',
         'f=d?a.o.b:0;',
         'Mm(a.i,a.B);',
