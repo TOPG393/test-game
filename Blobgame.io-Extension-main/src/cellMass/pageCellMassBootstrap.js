@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.17';
+  const SCRIPT_VERSION = '0.1.18';
   const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
   const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
   const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -22,6 +22,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
   const MAX_LABEL_HEIGHT = 0.32;
   const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
   const VISIBLE_PLAYER_MAX_AGE_MS = 2000;
+  const RADAR_PLAYER_MAX_AGE_MS = 250;
   const PLAYER_ARROW_CANVAS_ID = 'blobio-visible-player-arrows';
   const PLAYER_ARROW_TOGGLE_ID = 'blobio-visible-player-toggle';
 
@@ -413,11 +414,9 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     const scaleY = rect.height / canvasHeight;
     const now = Date.now();
     const freshPlayers = getVisiblePlayers()
-      .filter((player) => player.screenAt && now - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS);
+      .filter((player) => player.screenAt && now - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
     const ownCells = freshPlayers.filter((player) => player.own);
-    const players = freshPlayers
-      .filter((player) => !player.own)
-      .slice(0, 20);
+    const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
     const anchor = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
     if (!anchor) {
       state.lastRadar = {
@@ -496,6 +495,50 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       .slice()
       .sort((left, right) => (Number(right.mass) || 0) - (Number(left.mass) || 0))[0];
     return biggest ? [biggest] : [];
+  }
+
+  function groupRadarPlayers(players) {
+    const grouped = new Map();
+    for (const player of players) {
+      const key = String(player.name || player.cellId || '').trim().toLowerCase();
+      if (!key) {
+        continue;
+      }
+
+      const mass = Math.max(1, Number(player.mass) || 1);
+      const existing = grouped.get(key);
+      if (!existing) {
+        grouped.set(key, {
+          ...player,
+          mass,
+          splitCells: 1,
+          weightedScreenX: Number(player.screenX) * mass,
+          weightedScreenY: Number(player.screenY) * mass,
+          totalWeight: mass,
+        });
+        continue;
+      }
+
+      existing.mass += mass;
+      existing.splitCells += 1;
+      existing.friend = existing.friend || player.friend;
+      existing.weightedScreenX += Number(player.screenX) * mass;
+      existing.weightedScreenY += Number(player.screenY) * mass;
+      existing.totalWeight += mass;
+      if (mass > (Number(existing.primaryMass) || 0)) {
+        existing.cellId = player.cellId;
+        existing.primaryMass = mass;
+      }
+    }
+
+    return [...grouped.values()]
+      .map((player) => ({
+        ...player,
+        mass: Math.round(player.mass),
+        screenX: player.weightedScreenX / player.totalWeight,
+        screenY: player.weightedScreenY / player.totalWeight,
+      }))
+      .sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
   }
 
   function getRadarScale(players, anchor, scaleX, scaleY, rect) {
@@ -988,6 +1031,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     try {
       win.postMessage?.({
         source: STORAGE_BRIDGE_SOURCE,
+        type: 'set',
         key: CELL_MASS_SNAPSHOT_KEY,
         value: JSON.stringify(snapshot),
       }, '*');

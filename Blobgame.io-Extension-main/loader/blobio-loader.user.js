@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.95
+// @version      0.1.96
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.93';
+  const VERSION = '0.1.94';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -622,6 +622,7 @@
     yOffset: 10,
     nameGap: 1.2,
     updateDelayMs: 3000,
+    playerArrows: true,
   };
 
   function normalizeCellMassRuntimeSnapshot(value) {
@@ -640,6 +641,7 @@
       yOffset: normalizeHudInfoRuntimeNumber(value.yOffset, -120, 120, DEFAULT_CELL_MASS_RUNTIME_SETTINGS.yOffset),
       nameGap: normalizeHudInfoRuntimeNumber(value.nameGap, 0.1, 3, DEFAULT_CELL_MASS_RUNTIME_SETTINGS.nameGap),
       updateDelayMs: Math.round(normalizeHudInfoRuntimeNumber(value.updateDelayMs, 0, 10000, DEFAULT_CELL_MASS_RUNTIME_SETTINGS.updateDelayMs)),
+      playerArrows: value.playerArrows === undefined ? DEFAULT_CELL_MASS_RUNTIME_SETTINGS.playerArrows : readBooleanValue(value.playerArrows, DEFAULT_CELL_MASS_RUNTIME_SETTINGS.playerArrows),
       updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
     };
   }
@@ -6372,7 +6374,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.17';
+    const SCRIPT_VERSION = '0.1.18';
     const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
     const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
     const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -6384,6 +6386,7 @@
     const MAX_LABEL_HEIGHT = 0.32;
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2000;
+    const RADAR_PLAYER_MAX_AGE_MS = 250;
     const PLAYER_ARROW_CANVAS_ID = 'blobio-visible-player-arrows';
     const PLAYER_ARROW_TOGGLE_ID = 'blobio-visible-player-toggle';
 
@@ -6775,11 +6778,9 @@
       const scaleY = rect.height / canvasHeight;
       const now = Date.now();
       const freshPlayers = getVisiblePlayers()
-        .filter((player) => player.screenAt && now - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS);
+        .filter((player) => player.screenAt && now - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
       const ownCells = freshPlayers.filter((player) => player.own);
-      const players = freshPlayers
-        .filter((player) => !player.own)
-        .slice(0, 20);
+      const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
       const anchor = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
       if (!anchor) {
         state.lastRadar = {
@@ -6858,6 +6859,50 @@
         .slice()
         .sort((left, right) => (Number(right.mass) || 0) - (Number(left.mass) || 0))[0];
       return biggest ? [biggest] : [];
+    }
+
+    function groupRadarPlayers(players) {
+      const grouped = new Map();
+      for (const player of players) {
+        const key = String(player.name || player.cellId || '').trim().toLowerCase();
+        if (!key) {
+          continue;
+        }
+
+        const mass = Math.max(1, Number(player.mass) || 1);
+        const existing = grouped.get(key);
+        if (!existing) {
+          grouped.set(key, {
+            ...player,
+            mass,
+            splitCells: 1,
+            weightedScreenX: Number(player.screenX) * mass,
+            weightedScreenY: Number(player.screenY) * mass,
+            totalWeight: mass,
+          });
+          continue;
+        }
+
+        existing.mass += mass;
+        existing.splitCells += 1;
+        existing.friend = existing.friend || player.friend;
+        existing.weightedScreenX += Number(player.screenX) * mass;
+        existing.weightedScreenY += Number(player.screenY) * mass;
+        existing.totalWeight += mass;
+        if (mass > (Number(existing.primaryMass) || 0)) {
+          existing.cellId = player.cellId;
+          existing.primaryMass = mass;
+        }
+      }
+
+      return [...grouped.values()]
+        .map((player) => ({
+          ...player,
+          mass: Math.round(player.mass),
+          screenX: player.weightedScreenX / player.totalWeight,
+          screenY: player.weightedScreenY / player.totalWeight,
+        }))
+        .sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
     }
 
     function getRadarScale(players, anchor, scaleX, scaleY, rect) {
@@ -7350,6 +7395,7 @@
       try {
         win.postMessage?.({
           source: STORAGE_BRIDGE_SOURCE,
+          type: 'set',
           key: CELL_MASS_SNAPSHOT_KEY,
           value: JSON.stringify(snapshot),
         }, '*');

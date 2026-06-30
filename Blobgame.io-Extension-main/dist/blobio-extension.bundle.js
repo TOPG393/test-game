@@ -192,7 +192,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.17";
+    const SCRIPT_VERSION = "0.1.18";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -204,6 +204,7 @@
     const MAX_LABEL_HEIGHT = 0.32;
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2e3;
+    const RADAR_PLAYER_MAX_AGE_MS = 250;
     const PLAYER_ARROW_CANVAS_ID = "blobio-visible-player-arrows";
     const PLAYER_ARROW_TOGGLE_ID = "blobio-visible-player-toggle";
     let settings = normalizeSettings2(initialSettings);
@@ -539,9 +540,9 @@
       const scaleX = rect.width / canvasWidth;
       const scaleY = rect.height / canvasHeight;
       const now2 = Date.now();
-      const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS);
+      const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
       const ownCells = freshPlayers.filter((player) => player.own);
-      const players = freshPlayers.filter((player) => !player.own).slice(0, 20);
+      const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
       const anchor = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
       if (!anchor) {
         state.lastRadar = {
@@ -610,6 +611,44 @@
     function chooseFallbackAnchorCells(freshPlayers) {
       const biggest = freshPlayers.slice().sort((left, right) => (Number(right.mass) || 0) - (Number(left.mass) || 0))[0];
       return biggest ? [biggest] : [];
+    }
+    function groupRadarPlayers(players) {
+      const grouped = /* @__PURE__ */ new Map();
+      for (const player of players) {
+        const key = String(player.name || player.cellId || "").trim().toLowerCase();
+        if (!key) {
+          continue;
+        }
+        const mass = Math.max(1, Number(player.mass) || 1);
+        const existing = grouped.get(key);
+        if (!existing) {
+          grouped.set(key, {
+            ...player,
+            mass,
+            splitCells: 1,
+            weightedScreenX: Number(player.screenX) * mass,
+            weightedScreenY: Number(player.screenY) * mass,
+            totalWeight: mass
+          });
+          continue;
+        }
+        existing.mass += mass;
+        existing.splitCells += 1;
+        existing.friend = existing.friend || player.friend;
+        existing.weightedScreenX += Number(player.screenX) * mass;
+        existing.weightedScreenY += Number(player.screenY) * mass;
+        existing.totalWeight += mass;
+        if (mass > (Number(existing.primaryMass) || 0)) {
+          existing.cellId = player.cellId;
+          existing.primaryMass = mass;
+        }
+      }
+      return [...grouped.values()].map((player) => ({
+        ...player,
+        mass: Math.round(player.mass),
+        screenX: player.weightedScreenX / player.totalWeight,
+        screenY: player.weightedScreenY / player.totalWeight
+      })).sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
     }
     function getRadarScale(players, anchor, scaleX, scaleY, rect) {
       let farthest = 0;
@@ -1038,6 +1077,7 @@
       try {
         win.postMessage?.({
           source: STORAGE_BRIDGE_SOURCE4,
+          type: "set",
           key: CELL_MASS_SNAPSHOT_KEY2,
           value: JSON.stringify(snapshot)
         }, "*");
@@ -15833,7 +15873,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.93";
+  var DEFAULT_EXTENSION_VERSION = "0.1.94";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21468,7 +21508,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.93";
+  var EXTENSION_VERSION = "0.1.94";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
