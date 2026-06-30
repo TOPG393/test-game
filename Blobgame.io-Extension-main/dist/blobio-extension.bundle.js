@@ -190,7 +190,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.7";
+    const SCRIPT_VERSION = "0.1.8";
     const CACHE_SCRIPT_RE2 = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = "BlobioCellMassDraw";
     const PATCH_MARKER = "BlobioCellMassDraw";
@@ -198,9 +198,11 @@
     const MAX_LABEL_WIDTH = 0.9;
     const MAX_LABEL_HEIGHT = 0.32;
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
+    const VISIBLE_PLAYER_MAX_AGE_MS = 2e3;
     let settings = normalizeSettings2(initialSettings);
     let lastCacheSweep = 0;
     const labelCache = /* @__PURE__ */ new Map();
+    const visiblePlayers = /* @__PURE__ */ new Map();
     const state = {
       installed: true,
       version: SCRIPT_VERSION,
@@ -218,7 +220,8 @@
         hiddenBySetting: 0,
         hiddenByThreshold: 0,
         hiddenBySmartLimit: 0,
-        primaryLabels: 0
+        primaryLabels: 0,
+        visiblePlayerCells: 0
       },
       samples: [],
       lastLabel: null,
@@ -233,6 +236,8 @@
     win.BlobioCellMassDebug = debugReport;
     win.BlobioShowMassDebug = debugReport;
     win.blobioCellMassDebug = debugReport;
+    win.BlobioVisiblePlayers = getVisiblePlayers;
+    win.__BlobioVisiblePlayers = getVisiblePlayers;
     win.__blobioCellMassCaptureDraw = captureDrawState;
     if (win.__BLOBIO_CELL_MASS_TEST__) {
       win.__BlobioCellMassTestApi = {
@@ -259,7 +264,7 @@
       }
       return settings;
     }
-    function drawCellMassLabel(cellId, mass, rawSize, renderSize, cellSize, name, nameDrawn, nameScale, explicitFitScale, totalMass) {
+    function drawCellMassLabel(cellId, mass, rawSize, renderSize, cellSize, name, nameDrawn, nameScale, explicitFitScale, totalMass, worldX, worldY, cellType) {
       state.counters.drawHookCalls += 1;
       if (!settings.enabled) {
         state.counters.hiddenBySetting += 1;
@@ -277,6 +282,7 @@
         state.counters.hiddenByThreshold += 1;
         return null;
       }
+      rememberVisiblePlayer(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, worldX, worldY, cellType);
       const autoMinMass = settings.smartRendering ? getAutoMinMass(totalMass) : 0;
       if (autoMinMass > 0 && safeMass <= autoMinMass) {
         state.counters.hiddenBySmartLimit += 1;
@@ -309,6 +315,35 @@
       state.lastLabel = cloneLabelResult(cellId, safeMass, result);
       rememberSample(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, Boolean(nameDrawn), result);
       return result;
+    }
+    function rememberVisiblePlayer(cellId, mass, rawSize, renderSize, cellSize, name, worldX, worldY, cellType) {
+      const key = String(cellId ?? `${name}:${Math.round(Number(worldX) || 0)}:${Math.round(Number(worldY) || 0)}`);
+      const now2 = Date.now();
+      visiblePlayers.set(key, {
+        at: now2,
+        cellId: String(cellId ?? ""),
+        name: String(name || "").slice(0, 48),
+        mass: Math.round(Number(mass) || 0),
+        rawSize: roundNumber(rawSize),
+        renderSize: roundNumber(renderSize),
+        cellSize: roundNumber(cellSize),
+        x: roundNumber(worldX),
+        y: roundNumber(worldY),
+        type: Number.isFinite(Number(cellType)) ? Number(cellType) : null
+      });
+      state.counters.visiblePlayerCells += 1;
+      pruneVisiblePlayers(now2);
+    }
+    function pruneVisiblePlayers(now2 = Date.now()) {
+      for (const [key, player] of visiblePlayers) {
+        if (now2 - player.at > VISIBLE_PLAYER_MAX_AGE_MS) {
+          visiblePlayers.delete(key);
+        }
+      }
+    }
+    function getVisiblePlayers() {
+      pruneVisiblePlayers();
+      return [...visiblePlayers.values()].sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
     }
     function readMassText(cellId, mass, now2) {
       const key = String(cellId ?? `mass-${mass}`);
@@ -510,7 +545,7 @@
       const drawPatch = [
         "Gm(a.i,a.c,g.B,b,c);d=true}}",
         "if($wnd.BlobioCellMassDraw&&(!g.c||(g.c.M!=2&&g.c.M!=3&&g.c.M!=4&&g.c.M!=10))){",
-        "h=$wnd.BlobioCellMassDraw(g.n,g.w*g.w/100,g.w,g.M,g.N,g.B,d,d?f:0,0,qxe.g/100);",
+        "h=$wnd.BlobioCellMassDraw(g.n,g.w*g.w/100,g.w,g.M,g.N,g.B,d,d?f:0,0,qxe.g/100,g.R,g.S,g.c?g.c.M:-1);",
         "if(h&&h.text){",
         "f=d?a.o.b:0;",
         "Mm(a.i,a.B);",
@@ -578,12 +613,14 @@
           lastPatchResult: state.lastPatchResult
         },
         samples: state.samples.slice(),
+        visiblePlayers: getVisiblePlayers(),
         lastLabel: state.lastLabel,
         lastDrawCapture: state.lastDrawCapture,
         commands: [
           "BlobioCellMassDebug()",
           "BlobioShowMassDebug()",
-          "blobioCellMassDebug()"
+          "blobioCellMassDebug()",
+          "BlobioVisiblePlayers()"
         ],
         errors: state.errors.slice(-8)
       };
