@@ -81,7 +81,8 @@
     textScale: 0.65,
     yOffset: 10,
     nameGap: 1.2,
-    updateDelayMs: 3e3
+    updateDelayMs: 3e3,
+    playerArrows: true
   });
   function readCellMassSettings(storage, document = globalThis.document) {
     const storedSnapshot = parseCellMassSnapshot(storage?.getItem?.(CELL_MASS_SNAPSHOT_KEY));
@@ -145,7 +146,8 @@
       textScale: clampNumber(source.textScale, 0.35, 1.4, preset.textScale),
       yOffset: clampNumber(source.yOffset, -120, 120, preset.yOffset),
       nameGap: clampNumber(source.nameGap, 0.1, 3, preset.nameGap),
-      updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 1e4, DEFAULT_CELL_MASS_SETTINGS.updateDelayMs))
+      updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 1e4, DEFAULT_CELL_MASS_SETTINGS.updateDelayMs)),
+      playerArrows: source.playerArrows === void 0 ? DEFAULT_CELL_MASS_SETTINGS.playerArrows : Boolean(source.playerArrows)
     };
   }
   function normalizeMode(value) {
@@ -190,7 +192,9 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.12";
+    const SCRIPT_VERSION = "0.1.13";
+    const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
+    const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const CACHE_SCRIPT_RE2 = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = "BlobioCellMassDraw";
     const PATCH_MARKER = "BlobioCellMassDraw";
@@ -367,6 +371,7 @@
         playerArrows: Boolean(enabled)
       });
       state.settings = settings;
+      persistSettings();
       updatePlayerArrowToggle();
       if (settings.playerArrows) {
         installPlayerArrowOverlay();
@@ -750,6 +755,7 @@
           event.preventDefault?.();
           event.stopPropagation?.();
           setPlayerArrowsEnabled(!settings.playerArrows);
+          button.blur?.();
         });
         doc.body.appendChild(button);
       }
@@ -979,6 +985,23 @@
         updateDelayMs: Math.round(clampNumber2(source.updateDelayMs, 0, 1e4, defaults.updateDelayMs)),
         playerArrows: source.playerArrows === void 0 ? defaults.playerArrows : Boolean(source.playerArrows)
       };
+    }
+    function persistSettings() {
+      const snapshot = {
+        ...settings,
+        updatedAt: Date.now()
+      };
+      try {
+        win.localStorage?.setItem?.(CELL_MASS_SNAPSHOT_KEY2, JSON.stringify(snapshot));
+      } catch {
+      }
+      try {
+        const value = encodeURIComponent(JSON.stringify(snapshot));
+        const hostname = String(win.location?.hostname || "");
+        const domain = hostname === "blobgame.io" || hostname.endsWith(".blobgame.io") ? "; Domain=.blobgame.io" : "";
+        win.document.cookie = `${CELL_MASS_COOKIE_NAME2}=${value}; Path=/; Max-Age=31536000; SameSite=Lax${domain}`;
+      } catch {
+      }
     }
     function clampNumber2(value, min, max, fallback) {
       if (value === null || value === void 0 || value === "") {
@@ -15762,7 +15785,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.88";
+  var DEFAULT_EXTENSION_VERSION = "0.1.89";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21397,7 +21420,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.88";
+  var EXTENSION_VERSION = "0.1.89";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,

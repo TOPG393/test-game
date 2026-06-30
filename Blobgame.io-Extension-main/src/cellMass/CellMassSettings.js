@@ -19,6 +19,7 @@ export const DEFAULT_CELL_MASS_SETTINGS = Object.freeze({
   yOffset: 10,
   nameGap: 1.2,
   updateDelayMs: 3000,
+  playerArrows: true,
 });
 
 export function readCellMassSettings(storage, document = globalThis.document) {
@@ -98,6 +99,9 @@ export function normalizeCellMassSettings(settings = {}) {
     yOffset: clampNumber(source.yOffset, -120, 120, preset.yOffset),
     nameGap: clampNumber(source.nameGap, 0.1, 3, preset.nameGap),
     updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 10000, DEFAULT_CELL_MASS_SETTINGS.updateDelayMs)),
+    playerArrows: source.playerArrows === undefined
+      ? DEFAULT_CELL_MASS_SETTINGS.playerArrows
+      : Boolean(source.playerArrows),
   };
 }
 

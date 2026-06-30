@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.90
+// @version      0.1.91
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.88';
+  const VERSION = '0.1.89';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -6372,7 +6372,9 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.12';
+    const SCRIPT_VERSION = '0.1.13';
+    const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
+    const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
     const CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = 'BlobioCellMassDraw';
     const PATCH_MARKER = 'BlobioCellMassDraw';
@@ -6578,6 +6580,7 @@
         playerArrows: Boolean(enabled),
       });
       state.settings = settings;
+      persistSettings();
       updatePlayerArrowToggle();
       if (settings.playerArrows) {
         installPlayerArrowOverlay();
@@ -7012,6 +7015,7 @@
           event.preventDefault?.();
           event.stopPropagation?.();
           setPlayerArrowsEnabled(!settings.playerArrows);
+          button.blur?.();
         });
         doc.body.appendChild(button);
       }
@@ -7284,6 +7288,26 @@
         updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 10000, defaults.updateDelayMs)),
         playerArrows: source.playerArrows === undefined ? defaults.playerArrows : Boolean(source.playerArrows),
       };
+    }
+
+    function persistSettings() {
+      const snapshot = {
+        ...settings,
+        updatedAt: Date.now(),
+      };
+
+      try {
+        win.localStorage?.setItem?.(CELL_MASS_SNAPSHOT_KEY, JSON.stringify(snapshot));
+      } catch {}
+
+      try {
+        const value = encodeURIComponent(JSON.stringify(snapshot));
+        const hostname = String(win.location?.hostname || '');
+        const domain = hostname === 'blobgame.io' || hostname.endsWith('.blobgame.io')
+          ? '; Domain=.blobgame.io'
+          : '';
+        win.document.cookie = `${CELL_MASS_COOKIE_NAME}=${value}; Path=/; Max-Age=31536000; SameSite=Lax${domain}`;
+      } catch {}
     }
 
     function clampNumber(value, min, max, fallback) {
