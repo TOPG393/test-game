@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.89
+// @version      0.1.90
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.87';
+  const VERSION = '0.1.88';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -6372,7 +6372,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.11';
+    const SCRIPT_VERSION = '0.1.12';
     const CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = 'BlobioCellMassDraw';
     const PATCH_MARKER = 'BlobioCellMassDraw';
@@ -6777,6 +6777,7 @@
       const centerX = ownCenter.x;
       const centerY = ownCenter.y;
       const radarRadius = clampNumber(Math.min(rect.width, rect.height) * 0.16, 64, 130, 92);
+      const radarScale = getRadarScale(players, ownCenter, scaleX, scaleY, rect);
 
       drawPlayerRadar(context, centerX, centerY, radarRadius);
       for (const player of players) {
@@ -6785,7 +6786,7 @@
         }
         const targetX = clampNumber(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
         const targetY = clampNumber(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-        drawPlayerRadarDot(context, centerX, centerY, radarRadius, targetX, targetY, player);
+        drawPlayerRadarDot(context, centerX, centerY, radarRadius, targetX, targetY, radarScale, player);
       }
 
       if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
@@ -6817,6 +6818,25 @@
       };
     }
 
+    function getRadarScale(players, ownCenter, scaleX, scaleY, rect) {
+      let farthest = 0;
+      for (const player of players) {
+        if (player.own) {
+          continue;
+        }
+
+        const targetX = Number(player.screenX) * scaleX;
+        const targetY = Number(player.screenY) * scaleY;
+        const distance = Math.hypot(targetX - ownCenter.x, targetY - ownCenter.y);
+        if (Number.isFinite(distance)) {
+          farthest = Math.max(farthest, distance);
+        }
+      }
+
+      const visibleHalfRange = Math.max(rect.width, rect.height) * 0.5;
+      return Math.max(160, farthest, visibleHalfRange);
+    }
+
     function drawPlayerRadar(context, centerX, centerY, radius) {
       context.save();
       context.lineWidth = 2;
@@ -6829,22 +6849,27 @@
       context.fill();
       context.stroke();
       context.beginPath();
-      context.arc(centerX, centerY, 4, 0, Math.PI * 2);
-      context.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      context.arc(centerX, centerY, 5, 0, Math.PI * 2);
+      context.fillStyle = 'rgba(255, 68, 68, 0.96)';
       context.fill();
+      context.lineWidth = 2;
+      context.strokeStyle = 'rgba(255, 255, 255, 0.86)';
+      context.stroke();
       context.restore();
     }
 
-    function drawPlayerRadarDot(context, centerX, centerY, radius, targetX, targetY, player) {
-      const angle = Math.atan2(targetY - centerY, targetX - centerX);
-      const distance = Math.hypot(targetX - centerX, targetY - centerY);
+    function drawPlayerRadarDot(context, centerX, centerY, radius, targetX, targetY, radarScale, player) {
+      const dx = targetX - centerX;
+      const dy = targetY - centerY;
+      const distance = Math.hypot(dx, dy);
       if (!Number.isFinite(distance) || distance < 32) {
         return;
       }
 
-      const dotDistance = Math.min(radius - 10, Math.max(18, distance * 0.28));
-      const dotX = centerX + Math.cos(angle) * dotDistance;
-      const dotY = centerY + Math.sin(angle) * dotDistance;
+      const ratio = clampNumber(distance / radarScale, 0.08, 1, 0.08);
+      const dotDistance = Math.min(radius - 10, ratio * (radius - 10));
+      const dotX = centerX + (dx / distance) * dotDistance;
+      const dotY = centerY + (dy / distance) * dotDistance;
       const size = clampNumber(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 5, 5, 12, 7);
       const label = `${String(player.name || '').slice(0, 14)} ${formatMass(player.mass)}`.trim();
 
