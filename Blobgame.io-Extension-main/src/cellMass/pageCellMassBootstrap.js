@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.14';
+  const SCRIPT_VERSION = '0.1.15';
   const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
   const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
   const CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
@@ -418,6 +418,16 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       .filter((player) => !player.own)
       .slice(0, 20);
     const ownCenter = getOwnScreenCenter(ownCells, scaleX, scaleY, rect);
+    if (!ownCenter) {
+      state.lastRadar = {
+        at: now,
+        reason: 'own-cell-not-visible',
+        ownCells: 0,
+        players: players.length,
+      };
+      return;
+    }
+
     const centerX = ownCenter.x;
     const centerY = ownCenter.y;
     const radarRadius = clampNumber(Math.min(rect.width, rect.height) * 0.16, 64, 130, 92);
@@ -438,6 +448,9 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       radius: roundNumber(radarRadius),
       scale: roundNumber(radarScale),
       ownCells: ownCells.length,
+      anchor: ownCenter.anchor,
+      anchorName: ownCenter.name,
+      anchorMass: ownCenter.mass,
       players: players.length,
     };
 
@@ -448,25 +461,29 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
 
   function getOwnScreenCenter(ownCells, scaleX, scaleY, rect) {
     if (!ownCells.length) {
-      return {
-        x: rect.width / 2,
-        y: rect.height / 2,
-      };
+      return null;
     }
 
     let totalMass = 0;
     let weightedX = 0;
     let weightedY = 0;
+    let biggest = ownCells[0] || null;
     for (const player of ownCells) {
       const weight = Math.max(1, Number(player.mass) || 1);
       totalMass += weight;
       weightedX += Number(player.screenX) * scaleX * weight;
       weightedY += Number(player.screenY) * scaleY * weight;
+      if ((Number(player.mass) || 0) > (Number(biggest?.mass) || 0)) {
+        biggest = player;
+      }
     }
 
     return {
       x: clampNumber(weightedX / totalMass, 24, rect.width - 24, rect.width / 2),
       y: clampNumber(weightedY / totalMass, 24, rect.height - 24, rect.height / 2),
+      anchor: 'game-own-cell',
+      name: String(biggest?.name || ''),
+      mass: Math.round(Number(biggest?.mass) || 0),
     };
   }
 
