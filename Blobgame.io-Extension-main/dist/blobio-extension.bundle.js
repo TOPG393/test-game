@@ -192,9 +192,10 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.15";
+    const SCRIPT_VERSION = "0.1.16";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
+    const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
     const CACHE_SCRIPT_RE2 = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = "BlobioCellMassDraw";
     const PATCH_MARKER = "BlobioCellMassDraw";
@@ -541,12 +542,12 @@
       const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS);
       const ownCells = freshPlayers.filter((player) => player.own);
       const players = freshPlayers.filter((player) => !player.own).slice(0, 20);
-      const ownCenter = getOwnScreenCenter(ownCells, scaleX, scaleY, rect);
+      const ownCenter = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
       if (!ownCenter) {
         state.lastRadar = {
           at: now2,
-          reason: "own-cell-not-visible",
-          ownCells: 0,
+          reason: "no-anchor-cell-visible",
+          ownCells: ownCells.length,
           players: players.length
         };
         return;
@@ -578,15 +579,16 @@
         state.arrowOverlay = null;
       }
     }
-    function getOwnScreenCenter(ownCells, scaleX, scaleY, rect) {
-      if (!ownCells.length) {
+    function getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect) {
+      const anchorCells = ownCells.length ? ownCells : chooseFallbackAnchorCells(freshPlayers);
+      if (!anchorCells.length) {
         return null;
       }
       let totalMass = 0;
       let weightedX = 0;
       let weightedY = 0;
-      let biggest = ownCells[0] || null;
-      for (const player of ownCells) {
+      let biggest = anchorCells[0] || null;
+      for (const player of anchorCells) {
         const weight = Math.max(1, Number(player.mass) || 1);
         totalMass += weight;
         weightedX += Number(player.screenX) * scaleX * weight;
@@ -598,10 +600,14 @@
       return {
         x: clampNumber2(weightedX / totalMass, 24, rect.width - 24, rect.width / 2),
         y: clampNumber2(weightedY / totalMass, 24, rect.height - 24, rect.height / 2),
-        anchor: "game-own-cell",
+        anchor: ownCells.length ? "game-own-cell" : "largest-visible-cell",
         name: String(biggest?.name || ""),
         mass: Math.round(Number(biggest?.mass) || 0)
       };
+    }
+    function chooseFallbackAnchorCells(freshPlayers) {
+      const biggest = freshPlayers.slice().sort((left, right) => (Number(right.mass) || 0) - (Number(left.mass) || 0))[0];
+      return biggest ? [biggest] : [];
     }
     function getRadarScale(players, ownCenter, scaleX, scaleY, rect) {
       let farthest = 0;
@@ -1025,6 +1031,14 @@
       };
       try {
         win.localStorage?.setItem?.(CELL_MASS_SNAPSHOT_KEY2, JSON.stringify(snapshot));
+      } catch {
+      }
+      try {
+        win.postMessage?.({
+          source: STORAGE_BRIDGE_SOURCE4,
+          key: CELL_MASS_SNAPSHOT_KEY2,
+          value: JSON.stringify(snapshot)
+        }, "*");
       } catch {
       }
       try {
@@ -15817,7 +15831,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.91";
+  var DEFAULT_EXTENSION_VERSION = "0.1.92";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21452,7 +21466,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.91";
+  var EXTENSION_VERSION = "0.1.92";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,

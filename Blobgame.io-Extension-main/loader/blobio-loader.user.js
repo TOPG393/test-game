@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.93
+// @version      0.1.94
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.91';
+  const VERSION = '0.1.92';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -6372,9 +6372,10 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.15';
+    const SCRIPT_VERSION = '0.1.16';
     const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
     const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
+    const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
     const CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = 'BlobioCellMassDraw';
     const PATCH_MARKER = 'BlobioCellMassDraw';
@@ -6779,12 +6780,12 @@
       const players = freshPlayers
         .filter((player) => !player.own)
         .slice(0, 20);
-      const ownCenter = getOwnScreenCenter(ownCells, scaleX, scaleY, rect);
+      const ownCenter = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
       if (!ownCenter) {
         state.lastRadar = {
           at: now,
-          reason: 'own-cell-not-visible',
-          ownCells: 0,
+          reason: 'no-anchor-cell-visible',
+          ownCells: ownCells.length,
           players: players.length,
         };
         return;
@@ -6821,16 +6822,17 @@
       }
     }
 
-    function getOwnScreenCenter(ownCells, scaleX, scaleY, rect) {
-      if (!ownCells.length) {
+    function getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect) {
+      const anchorCells = ownCells.length ? ownCells : chooseFallbackAnchorCells(freshPlayers);
+      if (!anchorCells.length) {
         return null;
       }
 
       let totalMass = 0;
       let weightedX = 0;
       let weightedY = 0;
-      let biggest = ownCells[0] || null;
-      for (const player of ownCells) {
+      let biggest = anchorCells[0] || null;
+      for (const player of anchorCells) {
         const weight = Math.max(1, Number(player.mass) || 1);
         totalMass += weight;
         weightedX += Number(player.screenX) * scaleX * weight;
@@ -6843,10 +6845,17 @@
       return {
         x: clampNumber(weightedX / totalMass, 24, rect.width - 24, rect.width / 2),
         y: clampNumber(weightedY / totalMass, 24, rect.height - 24, rect.height / 2),
-        anchor: 'game-own-cell',
+        anchor: ownCells.length ? 'game-own-cell' : 'largest-visible-cell',
         name: String(biggest?.name || ''),
         mass: Math.round(Number(biggest?.mass) || 0),
       };
+    }
+
+    function chooseFallbackAnchorCells(freshPlayers) {
+      const biggest = freshPlayers
+        .slice()
+        .sort((left, right) => (Number(right.mass) || 0) - (Number(left.mass) || 0))[0];
+      return biggest ? [biggest] : [];
     }
 
     function getRadarScale(players, ownCenter, scaleX, scaleY, rect) {
@@ -7334,6 +7343,14 @@
 
       try {
         win.localStorage?.setItem?.(CELL_MASS_SNAPSHOT_KEY, JSON.stringify(snapshot));
+      } catch {}
+
+      try {
+        win.postMessage?.({
+          source: STORAGE_BRIDGE_SOURCE,
+          key: CELL_MASS_SNAPSHOT_KEY,
+          value: JSON.stringify(snapshot),
+        }, '*');
       } catch {}
 
       try {
