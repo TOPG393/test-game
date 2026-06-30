@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.19';
+  const SCRIPT_VERSION = '0.1.20';
   const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
   const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
   const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -418,18 +418,21 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
+    const arrowRadius = clampNumber(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
 
+    drawPlayerArrowRing(context, centerX, centerY, arrowRadius);
     for (const player of players) {
       const targetX = clampNumber(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
       const targetY = clampNumber(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-      drawPlayerDirectionArrow(context, centerX, centerY, targetX, targetY, player);
+      drawPlayerDirectionArrow(context, centerX, centerY, arrowRadius, targetX, targetY, player);
     }
 
     state.lastRadar = {
       at: now,
-      mode: 'screen-arrows',
+      mode: 'circle-arrows',
       centerX: roundNumber(centerX),
       centerY: roundNumber(centerY),
+      radius: roundNumber(arrowRadius),
       players: players.length,
     };
 
@@ -604,7 +607,25 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     context.restore();
   }
 
-  function drawPlayerDirectionArrow(context, centerX, centerY, targetX, targetY, player) {
+  function drawPlayerArrowRing(context, centerX, centerY, radius) {
+    context.save();
+    context.lineWidth = 2;
+    context.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    context.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    context.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    context.shadowBlur = 6;
+    context.beginPath();
+    context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.arc(centerX, centerY, 4, 0, Math.PI * 2);
+    context.fillStyle = 'rgba(255, 48, 48, 0.96)';
+    context.fill();
+    context.restore();
+  }
+
+  function drawPlayerDirectionArrow(context, centerX, centerY, radius, targetX, targetY, player) {
     const dx = targetX - centerX;
     const dy = targetY - centerY;
     const distance = Math.hypot(dx, dy);
@@ -613,9 +634,8 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     }
 
     const angle = Math.atan2(dy, dx);
-    const arrowDistance = Math.min(distance - 22, 190);
-    const arrowX = centerX + Math.cos(angle) * arrowDistance;
-    const arrowY = centerY + Math.sin(angle) * arrowDistance;
+    const arrowX = centerX + Math.cos(angle) * radius;
+    const arrowY = centerY + Math.sin(angle) * radius;
     const size = clampNumber(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 4.6, 8, 18, 11);
     const label = `${String(player.name || '').slice(0, 14)} ${formatMass(player.mass)}`.trim();
 

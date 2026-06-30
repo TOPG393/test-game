@@ -192,7 +192,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.19";
+    const SCRIPT_VERSION = "0.1.20";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -544,16 +544,19 @@
       const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
+      const arrowRadius = clampNumber2(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
+      drawPlayerArrowRing(context, centerX, centerY, arrowRadius);
       for (const player of players) {
         const targetX = clampNumber2(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
         const targetY = clampNumber2(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-        drawPlayerDirectionArrow(context, centerX, centerY, targetX, targetY, player);
+        drawPlayerDirectionArrow(context, centerX, centerY, arrowRadius, targetX, targetY, player);
       }
       state.lastRadar = {
         at: now2,
-        mode: "screen-arrows",
+        mode: "circle-arrows",
         centerX: roundNumber(centerX),
         centerY: roundNumber(centerY),
+        radius: roundNumber(arrowRadius),
         players: players.length
       };
       if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
@@ -705,7 +708,24 @@
       context.fillText(label, dotX, dotY - size - 11);
       context.restore();
     }
-    function drawPlayerDirectionArrow(context, centerX, centerY, targetX, targetY, player) {
+    function drawPlayerArrowRing(context, centerX, centerY, radius) {
+      context.save();
+      context.lineWidth = 2;
+      context.strokeStyle = "rgba(255, 255, 255, 0.4)";
+      context.fillStyle = "rgba(0, 0, 0, 0.1)";
+      context.shadowColor = "rgba(0, 0, 0, 0.35)";
+      context.shadowBlur = 6;
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      context.beginPath();
+      context.arc(centerX, centerY, 4, 0, Math.PI * 2);
+      context.fillStyle = "rgba(255, 48, 48, 0.96)";
+      context.fill();
+      context.restore();
+    }
+    function drawPlayerDirectionArrow(context, centerX, centerY, radius, targetX, targetY, player) {
       const dx = targetX - centerX;
       const dy = targetY - centerY;
       const distance = Math.hypot(dx, dy);
@@ -713,9 +733,8 @@
         return;
       }
       const angle = Math.atan2(dy, dx);
-      const arrowDistance = Math.min(distance - 22, 190);
-      const arrowX = centerX + Math.cos(angle) * arrowDistance;
-      const arrowY = centerY + Math.sin(angle) * arrowDistance;
+      const arrowX = centerX + Math.cos(angle) * radius;
+      const arrowY = centerY + Math.sin(angle) * radius;
       const size = clampNumber2(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 4.6, 8, 18, 11);
       const label = `${String(player.name || "").slice(0, 14)} ${formatMass(player.mass)}`.trim();
       context.save();
@@ -15893,7 +15912,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.95";
+  var DEFAULT_EXTENSION_VERSION = "0.1.96";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21528,7 +21547,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.95";
+  var EXTENSION_VERSION = "0.1.96";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
