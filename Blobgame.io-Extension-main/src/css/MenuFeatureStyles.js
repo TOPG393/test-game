@@ -2338,6 +2338,90 @@ html.${className} app-settings .blobio-extension-setting-row label[for="config-s
   text-shadow: 0 0 6px rgba(118, 255, 154, 0.62);
 }
 
+html.${className} app-settings .blobio-mock-friends-row {
+  grid-template-columns: minmax(96px, auto) minmax(120px, 1fr);
+  grid-auto-rows: auto;
+  align-items: center;
+  gap: 8px;
+}
+
+html.${className} app-settings .blobio-mock-friends-label {
+  color: #dfffe6;
+  font-weight: 800;
+  text-shadow: 0 0 6px rgba(118, 255, 154, 0.62);
+}
+
+html.${className} app-settings .blobio-mock-friends-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  min-width: 0;
+}
+
+html.${className} app-settings .blobio-mock-friends-input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid rgba(142, 255, 174, 0.46);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #dfffe6;
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 0 6px rgba(118, 255, 154, 0.52);
+  box-shadow: inset 0 0 8px rgba(91, 255, 132, 0.12);
+}
+
+html.${className} app-settings .blobio-mock-friends-input::placeholder {
+  color: rgba(223, 255, 230, 0.58);
+}
+
+html.${className} app-settings .blobio-mock-friends-add,
+html.${className} app-settings .blobio-mock-friends-chip {
+  min-height: 28px;
+  border: 1px solid rgba(142, 255, 174, 0.48);
+  border-radius: 7px;
+  background: rgba(3, 44, 23, 0.62);
+  color: #dfffe6;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 0 6px rgba(118, 255, 154, 0.62);
+  box-shadow: 0 0 10px rgba(79, 255, 130, 0.18), inset 0 0 7px rgba(79, 255, 130, 0.1);
+  cursor: pointer;
+}
+
+html.${className} app-settings .blobio-mock-friends-add {
+  padding: 0 10px;
+}
+
+html.${className} app-settings .blobio-mock-friends-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+  align-items: center;
+}
+
+html.${className} app-settings .blobio-mock-friends-chip {
+  padding: 0 9px;
+}
+
+html.${className} app-settings .blobio-mock-friends-chip:hover {
+  border-color: rgba(255, 116, 116, 0.72);
+  background: rgba(102, 10, 16, 0.88);
+  color: #fff;
+  text-shadow: 0 0 6px rgba(60, 0, 0, 0.95), 0 0 10px rgba(255, 42, 42, 0.5);
+}
+
+html.${className} app-settings .blobio-mock-friends-empty {
+  color: rgba(223, 255, 230, 0.66);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .blobio-extension-tooltip {
   position: fixed;
   z-index: 2147483600;

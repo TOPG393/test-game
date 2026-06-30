@@ -1,4 +1,5 @@
 import { normalizeUid } from '../roles/RoleRegistry.js';
+import { createBlobioStorage } from '../storage/BlobioStorage.js';
 
 const API_HOST = 'api.blobgame.io';
 const API_ROOT = 'https://api.blobgame.io:988/api';
@@ -6,6 +7,33 @@ const ACCESS_TOKEN_KEY = 'access-token';
 const PLATFORM = '3';
 const API_VERSION = '4.7';
 const TOKEN_POLL_INTERVAL_MS = 5000;
+const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
+
+export const MOCK_FRIEND_UIDS_KEY = 'blobio.settings.mockFriendUids';
+
+export function parseMockFriendUids(value) {
+  if (!value) {
+    return new Set();
+  }
+
+  let entries = [];
+  try {
+    const parsed = JSON.parse(String(value));
+    entries = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    entries = String(value).split(/[,\s]+/);
+  }
+
+  const uids = new Set();
+  for (const entry of entries) {
+    const uid = normalizeUid(entry);
+    if (uid) {
+      uids.add(uid);
+    }
+  }
+
+  return uids;
+}
 
 function toUrl(value, baseUrl) {
   try {
@@ -212,15 +240,18 @@ export class FriendRelationService {
   constructor({
     document = globalThis.document,
     friendHighlightStore,
+    storage = createBlobioStorage(document),
     fetchFn,
     logger = console,
   } = {}) {
     this.document = document;
     this.window = document?.defaultView || globalThis;
     this.friendHighlightStore = friendHighlightStore;
+    this.storage = storage;
     this.fetchFn = fetchFn || this.window.fetch?.bind(this.window) || globalThis.fetch?.bind(globalThis);
     this.logger = logger;
     this.friendUids = new Set();
+    this.mockFriendUids = new Set();
     this.listeners = new Set();
     this.accessToken = '';
     this.ownUid = '';
@@ -228,6 +259,8 @@ export class FriendRelationService {
     this.loadPromise = null;
     this.unsubscribeSetting = null;
     this.storageHandler = null;
+    this.messageHandler = null;
+    this.mockGmListenerId = null;
     this.tokenPollTimer = null;
     this.focusHandler = null;
     this.visibilityHandler = null;
@@ -250,6 +283,8 @@ export class FriendRelationService {
     this.installFetchHook();
     this.installXhrHook();
     this.installTokenListener();
+    this.installMockFriendListeners();
+    this.reloadMockFriendUids(false);
     this.installRefreshTriggers();
     this.unsubscribeSetting = this.friendHighlightStore?.subscribe?.((snapshot, source) => {
       if (snapshot.enabled) {
@@ -267,11 +302,19 @@ export class FriendRelationService {
 
   isFriend(rawUid) {
     const uid = normalizeUid(rawUid);
-    return Boolean(uid && this.friendUids.has(uid));
+    return Boolean(uid && (this.friendUids.has(uid) || this.mockFriendUids.has(uid)));
   }
 
   getFriendUids() {
+    return [...new Set([...this.friendUids, ...this.mockFriendUids])];
+  }
+
+  getAcceptedFriendUids() {
     return [...this.friendUids];
+  }
+
+  getMockFriendUids() {
+    return [...this.mockFriendUids];
   }
 
   readAccessToken() {
@@ -391,6 +434,27 @@ export class FriendRelationService {
     }
 
     this.notify(uid, source);
+    return true;
+  }
+
+  readMockFriendUids() {
+    try {
+      return parseMockFriendUids(this.storage?.getItem?.(MOCK_FRIEND_UIDS_KEY));
+    } catch {
+      return new Set();
+    }
+  }
+
+  reloadMockFriendUids(notify = true) {
+    const nextUids = this.readMockFriendUids();
+    if (sameUidSet(nextUids, this.mockFriendUids)) {
+      return false;
+    }
+
+    this.mockFriendUids = nextUids;
+    if (notify) {
+      this.notify('', 'mock-friends');
+    }
     return true;
   }
 
@@ -555,9 +619,32 @@ export class FriendRelationService {
       if (event?.key === ACCESS_TOKEN_KEY) {
         this.setToken(this.readAccessToken());
         this.refresh(true);
+      } else if (event?.key === MOCK_FRIEND_UIDS_KEY) {
+        this.reloadMockFriendUids();
       }
     };
     this.window.addEventListener?.('storage', this.storageHandler);
+  }
+
+  installMockFriendListeners() {
+    this.messageHandler = (event) => {
+      const message = event?.data;
+      if (message?.source === STORAGE_BRIDGE_SOURCE && message.key === MOCK_FRIEND_UIDS_KEY) {
+        this.reloadMockFriendUids();
+      }
+    };
+    this.window.addEventListener?.('message', this.messageHandler);
+
+    const addValueListener = this.window.GM_addValueChangeListener || globalThis.GM_addValueChangeListener;
+    if (typeof addValueListener !== 'function') {
+      return;
+    }
+
+    try {
+      this.mockGmListenerId = addValueListener(MOCK_FRIEND_UIDS_KEY, () => this.reloadMockFriendUids());
+    } catch (error) {
+      this.logger.warn?.('[Blobio] Could not watch mock-friends setting.', error);
+    }
   }
 
   subscribe(listener) {
@@ -573,6 +660,8 @@ export class FriendRelationService {
     const snapshot = {
       uid: normalizeUid(uid),
       friends: this.getFriendUids(),
+      acceptedFriends: this.getAcceptedFriendUids(),
+      mockFriends: this.getMockFriendUids(),
     };
 
     for (const listener of this.listeners) {
@@ -592,6 +681,19 @@ export class FriendRelationService {
       this.window.removeEventListener?.('storage', this.storageHandler);
       this.storageHandler = null;
     }
+
+    if (this.messageHandler) {
+      this.window.removeEventListener?.('message', this.messageHandler);
+      this.messageHandler = null;
+    }
+
+    const removeValueListener = this.window.GM_removeValueChangeListener || globalThis.GM_removeValueChangeListener;
+    if (this.mockGmListenerId !== null && typeof removeValueListener === 'function') {
+      try {
+        removeValueListener(this.mockGmListenerId);
+      } catch {}
+    }
+    this.mockGmListenerId = null;
 
     if (this.fetchWrapper && this.window.fetch === this.fetchWrapper) {
       this.window.fetch = this.nativeFetch;
@@ -620,6 +722,7 @@ export class FriendRelationService {
     }
 
     this.friendUids.clear();
+    this.mockFriendUids.clear();
     this.listeners.clear();
     this.loadPromise = null;
     this.started = false;

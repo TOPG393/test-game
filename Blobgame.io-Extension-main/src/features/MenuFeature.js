@@ -4,9 +4,11 @@ import { CellMassSettingsUi } from '../cellMass/CellMassSettingsUi.js';
 import { VirusPelletColorSettingsUi } from '../cellColors/VirusPelletColorSettingsUi.js';
 import { FpsSaverSettingsUi } from '../fpsSaver/FpsSaverSettingsUi.js';
 import { readFpsSaverSettings, saveFpsSaverSettings } from '../fpsSaver/FpsSaverSettings.js';
+import { MOCK_FRIEND_UIDS_KEY, parseMockFriendUids } from '../friends/FriendRelationService.js';
 import { createBlobioStorage } from '../storage/BlobioStorage.js';
 import { JellyShaderSettingsUi } from '../jelly/JellyShaderSettingsUi.js';
 import { isHideAdminMdEnabled, setHideAdminMdEnabled } from '../roles/RoleSettings.js';
+import { normalizeUid } from '../roles/RoleRegistry.js';
 import { isFpsUncapEnabled, setFpsUncapEnabled } from '../settings/RuntimeSettings.js';
 import { VirusMotherCellSettingsUi } from '../virus/VirusMotherCellSettingsUi.js';
 
@@ -50,6 +52,7 @@ const EXTENSION_OPTION_TOOLTIPS = {
   customSkin: 'FPS-Impact: Low[5-20]\nReplace one of your owned skin assets locally with a saved direct i.imgur.com image. Only you see the custom image.',
   hideAdminMd: 'FPS-Impact: Low[0-2]\nHide the built-in [MD] tag from extension ADMIN users in chat. This is enabled by default.',
   friendHighlight: 'FPS-Impact: Low[5-15]\nLoad accepted friends from Blobgame and color their chat name and message green. Friend requests and declined users are ignored.',
+  mockFriends: 'FPS-Impact: Low[1-5]\nDeveloper test list. Locally highlights visible chat rows for entered UIDs without sending friend requests or calling the friends API.',
   fpsUncap: 'FPS-Impact: Medium[0-80]\nUncap the in-game render loop after a safe startup delay, periodically yield to native frames, keep the game active when unfocused, and smooth camera zoom using the real frame delta. Off by default and applies immediately.',
   liteMode: 'FPS-Gain: Low[5-20]\nAdds CSS containment and offscreen rendering hints to heavy sections and third-party iframe surfaces without hiding videos or promos.',
   noTransitions: 'FPS-Gain: Medium[10-35]\nRemoves CSS transitions and animations from menus, panels, toasts, and modals. Expected save: low to medium smoothness gain.\n[WARNING: This is disabled by default because it will drastically reduce HUD-options.]',
@@ -1111,6 +1114,7 @@ export class MenuFeature {
           checkbox.checked = this.friendHighlightStore?.setEnabled?.(enabled) ?? false;
         },
       }),
+      this.createMockFriendsRow(),
       this.createExtensionSwitchRow({
         id: 'config-switch-hide-admin-md',
         label: 'Hide MD badge',
@@ -1229,6 +1233,128 @@ export class MenuFeature {
     }
 
     return row;
+  }
+
+  createMockFriendsRow() {
+    const row = this.document.createElement('div');
+    row.classList.add('grid-item', 'blobio-extension-setting-row', 'blobio-mock-friends-row');
+    row.setAttribute('_ngcontent-c3', '');
+    row.dataset.blobioTooltip = EXTENSION_OPTION_TOOLTIPS.mockFriends;
+
+    const label = this.document.createElement('label');
+    label.classList.add('blobio-mock-friends-label');
+    label.setAttribute('for', 'blobio-mock-friend-uid');
+    label.textContent = 'Mock friends';
+
+    const controls = this.document.createElement('div');
+    controls.classList.add('blobio-mock-friends-controls');
+
+    const input = this.document.createElement('input');
+    input.id = 'blobio-mock-friend-uid';
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.placeholder = 'UID';
+    input.classList.add('blobio-mock-friends-input');
+
+    const add = this.document.createElement('button');
+    add.type = 'button';
+    add.classList.add('blobio-mock-friends-add');
+    add.textContent = 'Add';
+
+    const list = this.document.createElement('div');
+    list.classList.add('blobio-mock-friends-list');
+
+    controls.append(input, add);
+    row.append(label, controls, list);
+
+    const apply = () => {
+      const uid = normalizeUid(input.value);
+      if (!uid) {
+        input.value = '';
+        return;
+      }
+
+      const uids = this.getMockFriendUids();
+      uids.add(uid);
+      this.setMockFriendUids(uids);
+      input.value = '';
+      this.syncMockFriendsRow(row);
+    };
+
+    this.addSettingsListener(add, 'click', (event) => {
+      event.preventDefault?.();
+      apply();
+      input.focus?.();
+    });
+    this.addSettingsListener(input, 'keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault?.();
+        apply();
+      }
+    });
+    this.addSettingsListener(row, 'click', (event) => {
+      const remove = event.target?.closest?.('.blobio-mock-friends-remove');
+      if (!remove) {
+        return;
+      }
+
+      const uid = normalizeUid(remove.dataset.uid);
+      const uids = this.getMockFriendUids();
+      uids.delete(uid);
+      this.setMockFriendUids(uids);
+      this.syncMockFriendsRow(row);
+    });
+    this.addSettingsListener(row, 'mouseenter', (event) => this.showExtensionTooltip(row, event));
+    this.addSettingsListener(row, 'mousemove', (event) => this.moveExtensionTooltip(event));
+    this.addSettingsListener(row, 'mouseleave', () => this.hideExtensionTooltip());
+
+    this.syncMockFriendsRow(row);
+    return row;
+  }
+
+  getMockFriendUids() {
+    try {
+      return parseMockFriendUids(this.storage?.getItem?.(MOCK_FRIEND_UIDS_KEY));
+    } catch {
+      return new Set();
+    }
+  }
+
+  setMockFriendUids(uids) {
+    const values = [...uids].map((uid) => normalizeUid(uid)).filter(Boolean).sort((a, b) => Number(a) - Number(b));
+    if (values.length === 0) {
+      this.storage?.removeItem?.(MOCK_FRIEND_UIDS_KEY);
+      return;
+    }
+
+    this.storage?.setItem?.(MOCK_FRIEND_UIDS_KEY, JSON.stringify(values));
+  }
+
+  syncMockFriendsRow(row) {
+    const list = row?.querySelector?.('.blobio-mock-friends-list');
+    if (!list) {
+      return;
+    }
+
+    const uids = [...this.getMockFriendUids()];
+    list.textContent = '';
+    if (uids.length === 0) {
+      const empty = this.document.createElement('span');
+      empty.classList.add('blobio-mock-friends-empty');
+      empty.textContent = 'No test UIDs.';
+      list.appendChild(empty);
+      return;
+    }
+
+    for (const uid of uids) {
+      const chip = this.document.createElement('button');
+      chip.type = 'button';
+      chip.classList.add('blobio-mock-friends-chip', 'blobio-mock-friends-remove');
+      chip.dataset.uid = uid;
+      chip.title = `Remove UID ${uid}`;
+      chip.textContent = uid;
+      list.appendChild(chip);
+    }
   }
 
   createFpsSaverSwitchRow({ id, key, label, description, checked }) {
