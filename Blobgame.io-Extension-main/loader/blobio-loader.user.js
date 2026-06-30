@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.85
+// @version      0.1.86
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.83';
+  const VERSION = '0.1.84';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -2855,7 +2855,7 @@
     const VIRUS_BRANCH_RE = /case 4:case 3:if\(g\.q\)\{if\(g\.P\)\{h=g\.P;([$A-Za-z_][$\w]*)\(\);([$A-Za-z_][$\w]*)\(a\.c,g\.K\);([$A-Za-z_][$\w]*)\(a\.c,h,g\.R-g\.M,g\.S-g\.M,g\.N,g\.N\)\}\}else\{\1\(\);\2\(a\.c,g\.K\);\3\(a\.c,(a\.[$A-Za-z_][$\w]*),g\.R-g\.M,g\.S-g\.M,g\.N,g\.N\)\}break;/;
     const FALLBACK_RENDER_RE = /function ([$A-Za-z_][$\w]*)\(a,b\)\{var c;if\(b\.q\)\{c=b\.P;([$A-Za-z_][$\w]*)\(\);([$A-Za-z_][$\w]*)\(a\.c,b\.K\);([$A-Za-z_][$\w]*)\(a\.c,c,b\.R-b\.M,b\.S-b\.M,b\.N,b\.N\)\}else if\(b\.P\)\{\3\(a\.c,b\.K\);\4\(a\.c,b\.P,b\.R-b\.M,b\.S-b\.M,b\.N,b\.N\)\}else\{b\.K\.a=0\.75;\3\(a\.c,b\.K\);\4\(a\.c,([$A-Za-z_][$\w]*),b\.R-b\.M,b\.S-b\.M,b\.N,b\.N\)\}\}/;
     const ROTATED_DRAW_RE = /function ([$A-Za-z_][$\w]*)\(a,b,c,d,e,f,g,h,i,j,k\)\{var [^;]+;if\(!a\.j\)throw [^;]+;[$A-Za-z_][$\w]*=a\.C;[$A-Za-z_][$\w]*=b\.v;[^{}]*?=c\+e;[^{}]*?=d\+f;[^{}]*?=-e;[^{}]*?=-f;/;
-  
+
     const tintedMaskUrl = createTintedMaskUrl(config.maskUrl, config.color);
     const settings = {
       maskId: config.maskId,
@@ -2870,7 +2870,7 @@
       b: parseInt(config.color.slice(5, 7), 16) / 255,
     };
     win.__blobVirusGlowSettings = settings;
-  
+
     const state = win.__blobVirusGlowState || {
       callbackCalls: 0,
       version: config.version || '',
@@ -2916,24 +2916,24 @@
     win.__blobVirusGlowState = state;
     state.patchBundle = patchBundle;
     loaderStatus.bootstrapResult = 'installing';
-  
+
     let customGlowMaskImage = null;
     let customGlowMaskUrl = '';
-  
+
     preloadCustomGlowMask();
     installGlowMaskTexturePatch();
     installGlowMaskAssetPatch();
     installRotationHelpers();
     installDebugSnapshot();
-  
+
     const NodeCtor = win.Node;
     if (!NodeCtor?.prototype) {
       return false;
     }
-  
+
     const nativeAppendChild = NodeCtor.prototype.appendChild;
     const nativeInsertBefore = NodeCtor.prototype.insertBefore;
-  
+
     function normalizeConfig(value) {
       const color = typeof value?.color === 'string' && /^#[0-9a-f]{6}$/i.test(value.color)
         ? value.color.toLowerCase()
@@ -2949,33 +2949,33 @@
         version: String(value?.version || ''),
       };
     }
-  
+
     function createTintedMaskUrl(maskUrl, color) {
       if (!maskUrl || !color || typeof win.encodeURIComponent !== 'function') {
         return maskUrl;
       }
-  
+
       const escapedMaskUrl = maskUrl
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;');
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><defs><filter id="blobio-tint" color-interpolation-filters="sRGB"><feFlood flood-color="${color}" result="color"/><feComposite in="color" in2="SourceAlpha" operator="in"/></filter></defs><image width="256" height="256" href="${escapedMaskUrl}" filter="url(#blobio-tint)"/></svg>`;
       return `data:image/svg+xml;charset=utf-8,${win.encodeURIComponent(svg)}`;
     }
-  
+
     function preloadCustomGlowMask() {
       getCustomGlowMaskImage();
     }
-  
+
     function getCustomGlowMaskImage() {
       if (customGlowMaskImage && customGlowMaskUrl === settings.maskUrl) {
         return customGlowMaskImage;
       }
-  
+
       const ImageCtor = win.Image || win.HTMLImageElement;
       if (typeof ImageCtor !== 'function' || !settings.maskUrl) {
         return null;
       }
-  
+
       const image = new ImageCtor();
       if (!settings.maskUrl.startsWith('data:') && !settings.maskUrl.startsWith('blob:')) {
         image.crossOrigin = 'anonymous';
@@ -2997,18 +2997,18 @@
         }
       };
       image.src = settings.maskUrl;
-  
+
       if (image.complete || image.naturalWidth > 0 || image.width > 0) {
         state.customMaskReady = true;
       }
       return image;
     }
-  
+
     function installGlowMaskTexturePatch() {
       patchWebGLTextureUpload(win.WebGLRenderingContext);
       patchWebGLTextureUpload(win.WebGL2RenderingContext);
     }
-  
+
     function patchWebGLTextureUpload(ContextCtor) {
       if (!ContextCtor?.prototype || ContextCtor.prototype.__blobVirusGlowTexImagePatched) {
         return;
@@ -3017,7 +3017,7 @@
       if (typeof nativeTexImage2D !== 'function') {
         return;
       }
-  
+
       ContextCtor.prototype.texImage2D = function patchedTexImage2D(...args) {
         const sourceIndex = findTextureSourceIndex(args);
         if (sourceIndex !== -1 && isGlowMaskSource(args[sourceIndex])) {
@@ -3032,7 +3032,7 @@
       };
       ContextCtor.prototype.__blobVirusGlowTexImagePatched = true;
     }
-  
+
     function findTextureSourceIndex(args) {
       for (let index = args.length - 1; index >= 0; index -= 1) {
         if (isTextureSource(args[index])) {
@@ -3041,29 +3041,29 @@
       }
       return -1;
     }
-  
+
     function isTextureSource(value) {
       return Boolean(value && typeof value === 'object'
         && ('src' in value || 'currentSrc' in value || 'tagName' in value || 'naturalWidth' in value));
     }
-  
+
     function isGlowMaskSource(source) {
       return GLOW_MASK_RE.test(getTextureSourceUrl(source));
     }
-  
+
     function getTextureSourceUrl(source) {
       if (!source) {
         return '';
       }
       return String(source.currentSrc || source.src || source.getAttribute?.('src') || '');
     }
-  
+
     function installGlowMaskAssetPatch() {
       const ImageCtor = win.HTMLImageElement;
       if (!ImageCtor?.prototype) {
         return;
       }
-  
+
       const imageProto = ImageCtor.prototype;
       const srcDescriptor = findPropertyDescriptor(imageProto, 'src');
       if (srcDescriptor?.set && !imageProto.__blobVirusGlowSrcPatched) {
@@ -3081,7 +3081,7 @@
         });
         imageProto.__blobVirusGlowSrcPatched = true;
       }
-  
+
       const ElementCtor = win.Element;
       if (!ElementCtor?.prototype || ElementCtor.prototype.__blobVirusGlowSetAttributePatched) {
         return;
@@ -3100,7 +3100,7 @@
       };
       ElementCtor.prototype.__blobVirusGlowSetAttributePatched = true;
     }
-  
+
     function rewriteGlowMaskUrl(value) {
       if (typeof value !== 'string' || !GLOW_MASK_RE.test(value)) {
         return value;
@@ -3108,7 +3108,7 @@
       state.glowMaskAssetHits = (state.glowMaskAssetHits + 1) || 1;
       return settings.maskUrl;
     }
-  
+
     function findPropertyDescriptor(proto, property) {
       let current = proto;
       while (current) {
@@ -3120,7 +3120,7 @@
       }
       return null;
     }
-  
+
     function installRotationHelpers() {
       const rotations = new Map();
       win.__blobVirusGlowShouldRotate = function shouldRotate() {
@@ -3162,7 +3162,7 @@
         return rotation;
       };
     }
-  
+
     function installDebugSnapshot() {
       win.__blobVirusGlowDebug = function debugSnapshot() {
         return {
@@ -3209,7 +3209,7 @@
         };
       };
     }
-  
+
     function patchBundle(source) {
       let code = source;
       const branchMatch = code.match(VIRUS_BRANCH_RE);
@@ -3222,7 +3222,7 @@
       let virusBranchPatched = false;
       let fallbackRenderPatched = false;
       let textureDrawPatched = false;
-  
+
       if (RENDER_LOOP_RE.test(code)) {
         code = code.replace(RENDER_LOOP_RE, (match) => match.replace(
           ';for(',
@@ -3230,14 +3230,14 @@
         ));
         renderLoopPatched = true;
       }
-  
+
       if (RENDER_CELL_RE.test(code)) {
         code = code.replace(RENDER_CELL_RE, (match) => match
           + 'h=$wnd.__blobVirusGlowState;'
           + 'if(h){h.currentCell=g;h.cellTypes||(h.cellTypes={});h.cellTypes[g.c.M]=(h.cellTypes[g.c.M]+1)||1}');
         renderCellPatched = true;
       }
-  
+
       if (VIRUS_BRANCH_RE.test(code)) {
         code = code.replace(VIRUS_BRANCH_RE, (match, initDrawState, setColor, drawRegion, branchVirusTexture, offset, fullCode) => {
           const branchGlowTexture = findGlowTextureFromAsset(fullCode) || findGlowTexture(fullCode, offset + match.length, drawRegion);
@@ -3252,7 +3252,7 @@
         });
         virusBranchPatched = true;
       }
-  
+
       if (FALLBACK_RENDER_RE.test(code)) {
         code = code.replace(FALLBACK_RENDER_RE, (match, fallbackName, initDrawState, setColor, drawRegion, defaultTexture, offset, fullCode) => {
           const fallbackGlowTexture = findGlowTextureFromAsset(fullCode) || 'a.n';
@@ -3270,13 +3270,13 @@
         });
         fallbackRenderPatched = true;
       }
-  
+
       if (drawRegionName) {
         const patchedDrawRegion = patchDrawRegionFunction(code, drawRegionName, rotatedDrawName);
         code = patchedDrawRegion.code;
         textureDrawPatched = patchedDrawRegion.changed;
       }
-  
+
       const result = {
         code,
         changed: renderLoopPatched || renderCellPatched || virusBranchPatched || fallbackRenderPatched || textureDrawPatched,
@@ -3290,7 +3290,7 @@
       state.lastPatchResult = { ...result, code: undefined };
       return result;
     }
-  
+
     function buildGlowDrawCall(rotatedDrawName, drawRegion, cellName, batchName, textureName, sourceName) {
       const normalDraw = `${drawRegion}(${batchName},${textureName},${cellName}.R-${cellName}.M*2,${cellName}.S-${cellName}.M*2,${cellName}.N*2,${cellName}.N*2)`;
       const isFallback = sourceName === 'fallback';
@@ -3303,14 +3303,14 @@
       }
       return `${markDraw}${rotatedDrawName}(${batchName},${textureName},${cellName}.R-${cellName}.M*2,${cellName}.S-${cellName}.M*2,${cellName}.N,${cellName}.N,${cellName}.N*2,${cellName}.N*2,1,1,$wnd.__blobVirusGlowGetDrawRotation?$wnd.__blobVirusGlowGetDrawRotation(${cellName}.n,${cellName}.R,${cellName}.S,'${sourceName}'):0)`;
     }
-  
+
     function patchDrawRegionFunction(code, drawRegionName, rotatedDrawName) {
       const escapedName = escapeRegExp(drawRegionName);
       const drawFunction = new RegExp(`function ${escapedName}\\(a,b,c,d,e,f\\)\\{var g,h,i,j,k,l,m,n,o,p;`);
       if (!drawFunction.test(code)) {
         return { code, changed: false };
       }
-  
+
       return {
         code: code.replace(drawFunction, (match) => match
           + 'g=$wnd.__blobVirusGlowState;'
@@ -3328,23 +3328,23 @@
         changed: true,
       };
     }
-  
+
     function findGlowTextureFromAsset(code) {
       const match = code.match(/[$A-Za-z_][$\w]*\.([$A-Za-z_][$\w]*)=[$A-Za-z_][$\w]*\([^;]*'_glow_mask'\)/);
       return match ? `a.${match[1]}` : null;
     }
-  
+
     function findGlowTexture(code, startIndex, drawRegion) {
       const nextCase = code.slice(startIndex, startIndex + 700);
       const escapedDrawRegion = escapeRegExp(drawRegion);
       const glowCall = new RegExp(`${escapedDrawRegion}\\(a\\.c,(a\\.[$A-Za-z_][$\\w]*),g\\.R-g\\.M\\*2,g\\.S-g\\.M\\*2,g\\.N\\*2,g\\.N\\*2\\)`);
       return nextCase.match(glowCall)?.[1] || 'a.n';
     }
-  
+
     function findRotatedDrawFunction(code) {
       return code.match(ROTATED_DRAW_RE)?.[1] || null;
     }
-  
+
     function rememberRotatedDrawFunction(source) {
       if (typeof source !== 'string') {
         return null;
@@ -3355,11 +3355,11 @@
       }
       return name;
     }
-  
+
     function escapeRegExp(value) {
       return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
-  
+
     function shouldPatchScript(node) {
       return Boolean(node
         && node.tagName === 'SCRIPT'
@@ -3367,14 +3367,14 @@
         && !node.dataset.blobVirusGlowPatched
         && CACHE_SCRIPT_RE.test(node.src));
     }
-  
+
     function rememberError(error) {
       const message = error?.message || String(error);
       state.errors.push(message);
       state.errors = state.errors.slice(-5);
       win.console?.warn?.('[Blobio Virus | Mother-cell]', message);
     }
-  
+
     function patchDownloadedChunk(chunk) {
       if (typeof chunk !== 'string') {
         return chunk;
@@ -3386,7 +3386,7 @@
       }
       return chunk;
     }
-  
+
     function patchDownloadedChunks(chunks) {
       if (Array.isArray(chunks)) {
         chunks.forEach(rememberRotatedDrawFunction);
@@ -3394,7 +3394,7 @@
       }
       return patchDownloadedChunk(chunks);
     }
-  
+
     function installGwtCallbackPatch() {
       const html = win.html;
       if (!html || html.__blobVirusGlowWrapped || typeof html.onScriptDownloaded !== 'function') {
@@ -3415,7 +3415,7 @@
       state.wrappedCallback = true;
       return true;
     }
-  
+
     NodeCtor.prototype.appendChild = function patchedAppendChild(node) {
       if (shouldPatchScript(node)) {
         state.seenCacheScripts += 1;
@@ -3423,7 +3423,7 @@
       }
       return nativeAppendChild.call(this, node);
     };
-  
+
     NodeCtor.prototype.insertBefore = function patchedInsertBefore(node, beforeNode) {
       if (shouldPatchScript(node)) {
         state.seenCacheScripts += 1;
@@ -3431,7 +3431,7 @@
       }
       return nativeInsertBefore.call(this, node, beforeNode);
     };
-  
+
     const callbackPatchTimer = win.setInterval(() => {
       if (installGwtCallbackPatch()) {
         win.clearInterval(callbackPatchTimer);
@@ -3452,7 +3452,7 @@
   const FOOD_BRANCH_HOOK = 'if(g.c&&g.c.M==2&&$wnd.__BlobCellColorizer&&$wnd.__BlobCellColorizer.foodGradient){$wnd.__BlobCellColorizer.foodBranch(g)}';
   const VIRUS_BRANCH_RE = /case 4:case 3:if\(g\.q\)\{if\(g\.P\)\{h=g\.P;([$A-Za-z_][$\w]*)\(\);([$A-Za-z_][$\w]*)\(a\.c,g\.K\);([$A-Za-z_][$\w]*)\(a\.c,h,g\.R-g\.M,g\.S-g\.M,g\.N,g\.N\)\}\}else\{\1\(\);\2\(a\.c,g\.K\);\3\(a\.c,(a\.[$A-Za-z_][$\w]*),g\.R-g\.M,g\.S-g\.M,g\.N,g\.N\)\}break;/;
   const FALLBACK_RENDER_RE = /function ([$A-Za-z_][$\w]*)\(a,b\)\{var c;if\(b\.q\)\{c=b\.P;([$A-Za-z_][$\w]*)\(\);([$A-Za-z_][$\w]*)\(a\.c,b\.K\);([$A-Za-z_][$\w]*)\(a\.c,c,b\.R-b\.M,b\.S-b\.M,b\.N,b\.N\)\}else if\(b\.P\)\{\3\(a\.c,b\.K\);\4\(a\.c,b\.P,b\.R-b\.M,b\.S-b\.M,b\.N,b\.N\)\}else\{b\.K\.a=0\.75;\3\(a\.c,b\.K\);\4\(a\.c,([$A-Za-z_][$\w]*),b\.R-b\.M,b\.S-b\.M,b\.N,b\.N\)\}\}/;
-  
+
   const PAGE_HOOK = '__BlobCellColorizer';
   const STATE_KEY = '__blobCellColorState';
   const INV_255 = 1 / 255;
@@ -3481,7 +3481,7 @@
       },
     },
   });
-  
+
   function pageVirusPelletColorsBootstrap(initialSettings, pageWindow = globalThis) {
     const win = pageWindow;
     const doc = win.document;
@@ -3491,19 +3491,19 @@
     loaderStatus.bootstrapHost = win.location?.hostname || '';
     loaderStatus.bootstrapEnabled = settings.enabled;
     win.__blobioVirusPelletColorLoaderStatus = loaderStatus;
-  
+
     if (!settings.enabled || win.location?.hostname !== 'custom.client.blobgame.io') {
       loaderStatus.bootstrapResult = 'skipped';
       exposeDisabledDebug(win, settings, loaderStatus);
       return false;
     }
-  
+
     if (win.__blobioVirusPelletColorInstalled) {
       win.__blobioVirusPelletColorRefresh?.(settings);
       return true;
     }
     win.__blobioVirusPelletColorInstalled = true;
-  
+
     let renderConfig = buildRenderConfig(settings);
     let activeProfile = null;
     const gradientMetrics = {
@@ -3517,30 +3517,30 @@
     };
     const state = getState(win);
     loaderStatus.bootstrapResult = 'installing';
-  
+
     win.addEventListener?.('resize', () => {
       gradientMetrics.canvas = null;
       gradientMetrics.checks = 0;
     }, { passive: true });
-  
+
     exposePageHook();
     installDebugCommand();
     installGameScriptPatch();
     loaderStatus.bootstrapResult = 'installed';
     return true;
-  
+
     function refresh(nextSettings) {
       renderConfig = buildRenderConfig(normalizeVirusPelletColorSettings(nextSettings));
       exposePageHook();
     }
-  
+
     function buildRenderConfig(source) {
       return {
         virus: buildRenderTarget(source.virus, 'virus', 'lastVirus'),
         pellets: buildRenderTarget(source.pellets, 'pellets', 'lastPellet'),
       };
     }
-  
+
     function buildRenderTarget(target, hitKey, lastKey) {
       const mode = target.mode === 'gradient' ? 'gradient' : 'solid';
       return {
@@ -3553,7 +3553,7 @@
         gradientColor: buildGradientColor(target.gradient, target.alpha),
       };
     }
-  
+
     function toGwtColor(color, alpha) {
       const clean = String(color || '#000000').slice(1);
       const red = Number.parseInt(clean.slice(0, 2), 16) || 0;
@@ -3570,12 +3570,12 @@
         alpha,
       };
     }
-  
+
     function buildGradientColor(gradient, alpha) {
       const angle = gradient.angle * Math.PI / 180;
       const from = toGwtColor(gradient.from, alpha);
       const to = toGwtColor(gradient.to, alpha);
-  
+
       return {
         cos: Math.cos(angle),
         sin: Math.sin(angle),
@@ -3589,7 +3589,7 @@
         deltaA: to.a - from.a,
       };
     }
-  
+
     function exposePageHook() {
       const virus = renderConfig.virus;
       const pellets = renderConfig.pellets;
@@ -3607,7 +3607,7 @@
       };
       win.__blobioVirusPelletColorRefresh = refresh;
     }
-  
+
     function getState() {
       const existing = win[STATE_KEY] && typeof win[STATE_KEY] === 'object' ? win[STATE_KEY] : {};
       const next = Object.assign({
@@ -3634,7 +3634,7 @@
         lastIgnored: null,
         errors: [],
       }, existing);
-  
+
       next.version = initialSettings?.version || next.version;
       next.hits = Object.assign({
         virus: 0,
@@ -3648,7 +3648,7 @@
       win[STATE_KEY] = next;
       return next;
     }
-  
+
     function installDebugCommand() {
       const debug = () => ({
         version: initialSettings?.version || state.version,
@@ -3679,38 +3679,38 @@
           errors: state.errors.slice(),
         },
       });
-  
+
       win.blobCellColorsDebug = debug;
       win.__blobCellColorsDebug = debug;
       win.blobCellColorsProfile = (durationMs) => startProfile(durationMs);
       win.__blobCellColorsProfile = win.blobCellColorsProfile;
     }
-  
+
     function rememberError(error) {
       const message = error?.message || String(error);
       state.errors.push(message);
       state.errors = state.errors.slice(-8);
       win.console?.warn?.('[Blobio] Virus | Pellets Colors', message);
     }
-  
+
     function applyObjectColor(target, object, allowedType) {
       const profile = activeProfile;
       const profileStart = profile ? nowMs() : 0;
-  
+
       if (!object || !object.K) {
         state.hits.ignoredByType += 1;
         sampleIgnoredObject(object);
         recordProfileCall(profile, 'ignored', 'ignored', profileStart);
         return false;
       }
-  
+
       if (allowedType !== null && getObjectType(object) !== allowedType) {
         state.hits.ignoredByType += 1;
         sampleIgnoredObject(object);
         recordProfileCall(profile, target.hitKey, 'ignored', profileStart);
         return false;
       }
-  
+
       if (target.gradient) {
         const amount = setGradientGwtColor(object.K, target.gradientColor, object);
         recordColorHit(target, object, amount);
@@ -3720,32 +3720,32 @@
         recordColorHit(target, object, null);
         recordProfileCall(profile, target.hitKey, 'solid', profileStart);
       }
-  
+
       return true;
     }
-  
+
     function applyBranchObjectColor(target, object) {
       const profile = activeProfile;
       const profileStart = profile ? nowMs() : 0;
-  
+
       if (!object || !object.K) {
         state.hits.ignoredByType += 1;
         sampleIgnoredObject(object);
         recordProfileCall(profile, 'ignored', 'ignored', profileStart);
         return false;
       }
-  
+
       const amount = setGradientGwtColor(object.K, target.gradientColor, object);
       recordColorHit(target, object, amount);
       recordProfileCall(profile, target.hitKey, 'gradient', profileStart);
       return true;
     }
-  
+
     function startProfile(durationMs) {
       if (activeProfile?.promise) {
         return activeProfile.promise;
       }
-  
+
       const requested = Number(durationMs);
       const duration = Number.isFinite(requested) ? requested : 2000;
       const clampedDuration = Math.min(10000, Math.max(250, Math.round(duration)));
@@ -3761,7 +3761,7 @@
         },
         promise: null,
       };
-  
+
       profile.promise = new Promise((resolve) => {
         win.setTimeout(() => {
           const summary = summarizeProfile(profile);
@@ -3772,11 +3772,11 @@
           resolve(summary);
         }, clampedDuration);
       });
-  
+
       activeProfile = profile;
       return profile.promise;
     }
-  
+
     function createProfileBucket() {
       return {
         calls: 0,
@@ -3788,12 +3788,12 @@
         maxMs: 0,
       };
     }
-  
+
     function recordProfileCall(profile, targetName, path, startedAt) {
       if (!profile) {
         return;
       }
-  
+
       const bucket = profile.targets[targetName] || profile.targets.ignored;
       const elapsed = nowMs() - startedAt;
       bucket.calls += 1;
@@ -3801,7 +3801,7 @@
       bucket.totalMs += elapsed;
       bucket.maxMs = Math.max(bucket.maxMs, elapsed);
     }
-  
+
     function summarizeProfile(profile) {
       const elapsed = Math.max(1, nowMs() - profile.startedAt);
       const hitDelta = {
@@ -3810,7 +3810,7 @@
         ignoredByType: state.hits.ignoredByType - (profile.startHits.ignoredByType || 0),
         disabled: state.hits.disabled - (profile.startHits.disabled || 0),
       };
-  
+
       return {
         durationMs: Math.round(elapsed),
         hitDelta,
@@ -3826,7 +3826,7 @@
         },
       };
     }
-  
+
     function summarizeProfileBucket(bucket, elapsed) {
       return {
         calls: bucket.calls,
@@ -3840,26 +3840,26 @@
         maxMs: roundProfileNumber(bucket.maxMs),
       };
     }
-  
+
     function roundProfileNumber(value) {
       return Math.round(value * 1000) / 1000;
     }
-  
+
     function nowMs() {
       return typeof win.performance?.now === 'function' ? win.performance.now() : Date.now();
     }
-  
+
     function getObjectType(object) {
       const type = object?.c?.M;
       const number = Number(type);
       return Number.isFinite(number) ? number : type;
     }
-  
+
     function debugObject(object, color) {
       if (!object) {
         return null;
       }
-  
+
       return {
         id: object.n,
         type: getObjectType(object),
@@ -3871,41 +3871,41 @@
         time: Date.now(),
       };
     }
-  
+
     function sampleIgnoredObject(object) {
       if ((state.hits.ignoredByType & DEBUG_SAMPLE_MASK) === 0) {
         state.lastIgnored = debugObject(object, null);
       }
     }
-  
+
     function setRuntimeGwtColor(target, color) {
       target.d = color.d;
       target.c = color.c;
       target.b = color.b;
       target.a = color.a;
     }
-  
+
     function setGradientGwtColor(target, gradient, object) {
       const metrics = getGradientMetrics();
       const x = object.R || 0;
       const y = object.S || 0;
       const projected = ((x - metrics.centerX) * gradient.cos + (y - metrics.centerY) * gradient.sin) * metrics.invLength + 0.5;
       const amount = projected < 0 ? 0 : projected > 1 ? 1 : projected;
-  
+
       target.d = gradient.fromD + gradient.deltaD * amount;
       target.c = gradient.fromC + gradient.deltaC * amount;
       target.b = gradient.fromB + gradient.deltaB * amount;
       target.a = gradient.fromA + gradient.deltaA * amount;
       return amount;
     }
-  
+
     function getGradientMetrics() {
       if (!gradientMetrics.canvas || (gradientMetrics.checks++ & METRICS_REFRESH_MASK) === 0) {
         refreshGradientMetrics();
       }
       return gradientMetrics;
     }
-  
+
     function refreshGradientMetrics() {
       state.metricsRefreshes += 1;
       let canvas = gradientMetrics.canvas;
@@ -3913,7 +3913,7 @@
         canvas = doc.querySelector?.('#embed-html canvas, canvas') || null;
         gradientMetrics.canvas = canvas;
       }
-  
+
       const width = canvas && (canvas.width || canvas.clientWidth) || win.innerWidth || 1280;
       const height = canvas && (canvas.height || canvas.clientHeight) || win.innerHeight || 720;
       gradientMetrics.width = width;
@@ -3922,20 +3922,20 @@
       gradientMetrics.centerY = height / 2;
       gradientMetrics.invLength = 1 / (Math.sqrt(width * width + height * height) || 1);
     }
-  
+
     function recordColorHit(target, object, amount) {
       const hits = state.hits[target.hitKey] + 1;
       state.hits[target.hitKey] = hits;
-  
+
       if ((hits & DEBUG_SAMPLE_MASK) !== 0) {
         return;
       }
-  
+
       state[target.lastKey] = debugObject(object, amount === null
         ? runtimeColorToDebug(target.solidColor)
         : gradientColorToDebug(target.gradientColor, amount));
     }
-  
+
     function runtimeColorToDebug(color) {
       return {
         r: color.r,
@@ -3944,7 +3944,7 @@
         a: color.alpha,
       };
     }
-  
+
     function gradientColorToDebug(gradient, amount) {
       return {
         r: Math.round((gradient.fromD + gradient.deltaD * amount) * 255),
@@ -3953,16 +3953,16 @@
         a: Math.round((gradient.fromA + gradient.deltaA * amount) * 100),
       };
     }
-  
+
     function installGameScriptPatch() {
       const NodeCtor = win.Node;
       if (!NodeCtor?.prototype || NodeCtor.prototype.__blobCellColorPatchInstalled) {
         return;
       }
-  
+
       const originalAppendChild = NodeCtor.prototype.appendChild;
       const originalInsertBefore = NodeCtor.prototype.insertBefore;
-  
+
       NodeCtor.prototype.appendChild = function appendChildBlobCellColor(node) {
         if (shouldPatchScript(node)) {
           node.dataset.blobCellColorPatch = 'seen';
@@ -3971,7 +3971,7 @@
         }
         return originalAppendChild.call(this, node);
       };
-  
+
       NodeCtor.prototype.insertBefore = function insertBeforeBlobCellColor(node, child) {
         if (shouldPatchScript(node)) {
           node.dataset.blobCellColorPatch = 'seen';
@@ -3980,11 +3980,11 @@
         }
         return originalInsertBefore.call(this, node, child);
       };
-  
+
       NodeCtor.prototype.__blobCellColorPatchInstalled = true;
       state.patchInstalled = true;
       installGwtCallbackPatch();
-  
+
       const callbackPatchTimer = win.setInterval?.(() => {
         if (installGwtCallbackPatch()) {
           win.clearInterval?.(callbackPatchTimer);
@@ -3994,7 +3994,7 @@
         win.clearInterval?.(callbackPatchTimer);
       }, 30000);
     }
-  
+
     function shouldPatchScript(node) {
       return node
         && node.tagName === 'SCRIPT'
@@ -4002,13 +4002,13 @@
         && !node.dataset.blobCellColorPatch
         && CACHE_SCRIPT_RE.test(node.src);
     }
-  
+
     function installGwtCallbackPatch() {
       const html = win.html;
       if (!html || html.__blobCellColorsWrapped || typeof html.onScriptDownloaded !== 'function') {
         return false;
       }
-  
+
       const originalOnScriptDownloaded = html.onScriptDownloaded;
       html.onScriptDownloaded = function blobCellColorsOnScriptDownloaded(chunks) {
         state.callbackCalls += 1;
@@ -4020,34 +4020,34 @@
         }
         return originalOnScriptDownloaded.call(this, patchedChunks);
       };
-  
+
       html.__blobCellColorsWrapped = true;
       state.wrappedCallback = true;
       return true;
     }
-  
+
     function patchDownloadedChunks(chunks) {
       if (Array.isArray(chunks)) {
         return chunks.map(patchDownloadedChunk);
       }
       return patchDownloadedChunk(chunks);
     }
-  
+
     function patchDownloadedChunk(chunk) {
       if (typeof chunk !== 'string') {
         return chunk;
       }
-  
+
       const patched = patchGameCode(chunk);
       if (!patched.changed) {
         return chunk;
       }
-  
+
       state.patchedChunks += 1;
       state.lastPatchTime = Date.now();
       return patched.code;
     }
-  
+
     function patchGameCode(code) {
       let patched = code;
       let foodPatched = false;
@@ -4058,7 +4058,7 @@
       let virusPatched = false;
       let fallbackFoodPatched = false;
       let fallbackVirusPatched = false;
-  
+
       if (!patched.includes('$wnd.__BlobCellColorizer.foodBranch(g)') && foodDrawSeen) {
         patched = patched.replace(FOOD_DRAW_RE, (match, setColor, drawRegion, foodTexture) => {
           foodPatched = true;
@@ -4081,7 +4081,7 @@
           return match + FOOD_BRANCH_HOOK;
         });
       }
-  
+
       if (VIRUS_BRANCH_RE.test(patched)) {
         patched = patched.replace(VIRUS_BRANCH_RE, (match, initDrawState, setColor, drawRegion, virusTexture) => {
           virusPatched = true;
@@ -4092,7 +4092,7 @@
             + `else{${initDrawState}();${setColor}(a.c,g.K);${drawRegion}(a.c,${virusTexture},g.R-g.M,g.S-g.M,g.N,g.N)}break;`;
         });
       }
-  
+
       if (FALLBACK_RENDER_RE.test(patched)) {
         patched = patched.replace(FALLBACK_RENDER_RE, (match, fallbackName, initDrawState, setColor, drawRegion, defaultTexture) => {
           fallbackVirusPatched = true;
@@ -4106,7 +4106,7 @@
             + `else{b.K.a=0.75;${setColor}(a.c,b.K);${drawRegion}(a.c,${defaultTexture},b.R-b.M,b.S-b.M,b.N,b.N)}}}`;
         });
       }
-  
+
       const result = {
         changed: foodPatched || virusPatched || fallbackFoodPatched || fallbackVirusPatched,
         foodCaseSeen,
@@ -4124,19 +4124,19 @@
       if (result.changed) {
         state.lastChangedPatchResult = result;
       }
-  
+
       return {
         code: patched,
         changed: result.changed,
       };
     }
   }
-  
+
   function exposeDisabledDebug(win, settings, loaderStatus) {
     if (typeof win.blobCellColorsDebug === 'function') {
       return;
     }
-  
+
     win.blobCellColorsDebug = () => ({
       enabled: false,
       settings,
@@ -4144,7 +4144,7 @@
     });
     win.__blobCellColorsDebug = win.blobCellColorsDebug;
   }
-  
+
   function normalizeVirusPelletColorSettings(settings = {}) {
     const source = settings && typeof settings === 'object' ? settings : {};
     return {
@@ -4153,11 +4153,11 @@
       pellets: normalizeTargetSettings(source.pellets, DEFAULT_SETTINGS.pellets),
     };
   }
-  
+
   function normalizeTargetSettings(value, fallback) {
     const source = value && typeof value === 'object' ? value : {};
     const gradient = source.gradient && typeof source.gradient === 'object' ? source.gradient : {};
-  
+
     return {
       mode: source.mode === 'gradient' ? 'gradient' : 'solid',
       alpha: normalizeAlpha(source.alpha, fallback.alpha),
@@ -4169,17 +4169,17 @@
       },
     };
   }
-  
+
   function normalizeColor(value, fallback) {
     const color = String(value || '').trim().toLowerCase();
     return /^#[0-9a-f]{6}$/.test(color) ? color : fallback;
   }
-  
+
   function normalizeAlpha(value, fallback) {
     const alpha = Number(value);
     return Number.isFinite(alpha) ? Math.max(0, Math.min(100, Math.round(alpha))) : fallback;
   }
-  
+
   function normalizeAngle(value, fallback) {
     const angle = Number(value);
     if (!Number.isFinite(angle)) {
@@ -4192,27 +4192,27 @@
   /* JELLY_SHADER_RUNTIME_START */
   const JELLY_SHADER_MARKER = 'BlobioJellyPhysics';
   const JELLY_SHADER_VANILLA_KEY = 'config-switch-jelly-physics';
-  
+
   const DEFAULT_JELLY_SHADER_RUNTIME_SETTINGS = Object.freeze({
     enabled: false,
     skinCells: true,
     noSkinCells: false,
   });
-  
+
   function pageJellyShaderBootstrap(initialSettings, pageWindow = globalThis) {
     const win = pageWindow;
     let settings = normalizeJellyShaderRuntimeSettings(initialSettings);
-  
+
     if (win.location?.hostname !== 'custom.client.blobgame.io') {
       return false;
     }
-  
+
     if (win.__blobioJellyShaderInstalled) {
       win.__blobioJellyShaderRefresh?.(settings);
       return true;
     }
     win.__blobioJellyShaderInstalled = true;
-  
+
     const status = {
       version: initialSettings?.version || '',
       enabled: settings.enabled,
@@ -4225,12 +4225,12 @@
     };
     win.__blobioJellyShaderStatus = status;
     win.__blobioJellyShaderRefresh = refresh;
-  
+
     prepareVanillaJellyShaderPath();
     installShaderHook();
     retryShaderHook();
     return true;
-  
+
     function refresh(nextSettings) {
       const previous = settings;
       settings = normalizeJellyShaderRuntimeSettings(nextSettings);
@@ -4250,45 +4250,45 @@
         status.reloadNeeded = true;
       }
     }
-  
+
     function prepareVanillaJellyShaderPath() {
       if (!settings.enabled) {
         return;
       }
-  
+
       try {
         win.localStorage?.setItem?.(JELLY_SHADER_VANILLA_KEY, 'true');
       } catch {}
     }
-  
+
     function markVanillaJellyDisabled() {
       if (!settings.enabled) {
         return;
       }
-  
+
       try {
         win.localStorage?.setItem?.(JELLY_SHADER_VANILLA_KEY, 'false');
       } catch {}
-  
+
       const checkbox = win.document?.getElementById?.(JELLY_SHADER_VANILLA_KEY);
       if (checkbox) {
         checkbox.checked = false;
         checkbox.setAttribute?.('aria-checked', 'false');
       }
     }
-  
+
     function installShaderHook() {
       const contexts = [win.WebGLRenderingContext, win.WebGL2RenderingContext];
       for (const Ctor of contexts) {
         if (!Ctor?.prototype || Ctor.prototype.__blobioJellyShaderHooked) {
           continue;
         }
-  
+
         const nativeShaderSource = Ctor.prototype.shaderSource;
         if (typeof nativeShaderSource !== 'function') {
           continue;
         }
-  
+
         Ctor.prototype.shaderSource = function blobioJellyShaderSource(shader, source) {
           status.shaderSourcesSeen += 1;
           const patched = patchShaderSource(source);
@@ -4305,12 +4305,12 @@
           }
           return nativeShaderSource.call(this, shader, source);
         };
-  
+
         Ctor.prototype.__blobioJellyShaderHooked = true;
         status.hookInstalled = true;
       }
     }
-  
+
     function retryShaderHook() {
       let attempts = 0;
       const timer = win.setInterval?.(() => {
@@ -4321,37 +4321,37 @@
         }
       }, 100);
     }
-  
+
     function patchShaderSource(source) {
       if (typeof source !== 'string' || !settings.enabled || (!settings.skinCells && !settings.noSkinCells)) {
         return { source, changed: false };
       }
-  
+
       if (source.includes(JELLY_SHADER_MARKER) || !isCellShader(source)) {
         return { source, changed: false };
       }
-  
+
       const centerPattern = /(const\s+vec2\s+CENTER_COORD\s*=\s*vec2\s*\(\s*0\.5\s*,\s*0\.5\s*\)\s*;)/;
       const scalePattern = /float\s+scale\s*=\s*v_scale\s*;\s*RADIUS\s*-=\s*scale\s*;/;
       if (!centerPattern.test(source)) {
         return { source, changed: false };
       }
-  
+
       let patched = source.replace(centerPattern, `$1\n\n${buildJellyGlsl(settings.noSkinCells)}`);
       let skinPatched = false;
       let noSkinPatched = false;
-  
+
       if (settings.skinCells && scalePattern.test(patched)) {
         patched = patched.replace(scalePattern, 'float scale = blobioJellyScale(v_scale, v_texCoords);\n    RADIUS -= scale;');
         skinPatched = true;
       }
-  
+
       if (settings.noSkinCells && patched.includes('drawEmptyCell')) {
         const next = patchNoSkinCellShader(patched);
         noSkinPatched = next !== patched;
         patched = next;
       }
-  
+
       return {
         source: patched,
         changed: patched !== source,
@@ -4359,13 +4359,13 @@
         noSkinPatched,
       };
     }
-  
+
     function patchNoSkinCellShader(source) {
       const startPattern = /void\s+drawEmptyCell\s*\(\s*\)\s*\{\s*float\s+len\s*=\s*length\s*\(\s*CENTER_COORD\s*-\s*v_texCoords\s*\)\s*;/;
       if (!startPattern.test(source)) {
         return source;
       }
-  
+
       return source
         .replace(
           startPattern,
@@ -4374,14 +4374,14 @@
         .replace(/if\s*\(\s*len\s*<\s*0\.5\s*\)\s*\{/, 'if (len < emptyRadius) {')
         .replace(/if\s*\(\s*len\s*<\s*0\.5\s*\*\s*0\.954\s*\)\s*\{/, 'if (len < emptyRadius * 0.954) {');
     }
-  
+
     function isCellShader(source) {
       return source.includes('varying float v_scale')
         && source.includes('uniform float u_time')
         && source.includes('CENTER_COORD')
         && /RADIUS\s*-=\s*scale\s*;/.test(source);
     }
-  
+
     function buildJellyGlsl(includeNoSkinCells) {
       const lines = [
         `// ${JELLY_SHADER_MARKER}. Uses existing u_time and v_scale uniforms only.`,
@@ -4396,7 +4396,7 @@
         '    return max(0.0, baseScale * 0.86 + wobble);',
         '}',
       ];
-  
+
       if (includeNoSkinCells) {
         lines.push(
           '',
@@ -4405,11 +4405,11 @@
           '}',
         );
       }
-  
+
       return lines.join('\n');
     }
   }
-  
+
   function normalizeJellyShaderRuntimeSettings(settings = {}) {
     const source = settings && typeof settings === 'object' ? settings : {};
     return {
@@ -4429,7 +4429,7 @@
   const HUD_INFO_PING_STALE_MS = 9000;
   const HUD_INFO_MAX_SAMPLES = 240;
   const HUD_INFO_BOOSTER_GAME_STALE_MS = 1200;
-  
+
   const HUD_INFO_STYLE_MODES = new Set(['solid', 'simple']);
   const HUD_INFO_DATA_MODES = new Set(['default', 'advanced', 'dev']);
   const HUD_INFO_POSITION_MODES_SET = new Set(['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right']);
@@ -4441,19 +4441,19 @@
   const HUD_INFO_LAYOUT_CLASSES = [...HUD_INFO_LAYOUT_MODES_SET].map((mode) => `is-layout-${mode}`);
   const HUD_INFO_BOOSTER_TYPES = ['SPEED', 'MERGE', 'VIRUS'];
   const HUD_INFO_BOOSTER_PATTERN = /\b(SPEED|MERGE|VIRUS)\s*:\s*(\d+(?:\.\d+)?)\s*s\b/gi;
-  
+
   const HUD_INFO_MASS_COLORS = {
     red: 'rgb(255, 74, 74)',
     yellow: 'rgb(255, 220, 74)',
     green: 'rgb(83, 255, 119)',
   };
-  
+
   const HUD_INFO_BOOSTER_NAME_CLASSES = {
     SPEED: 'is-speed',
     MERGE: 'is-merge',
     VIRUS: 'is-virus',
   };
-  
+
   const DEFAULT_HUD_INFO_RUNTIME_SETTINGS = Object.freeze({
     enabled: true,
     showScore: true,
@@ -4474,7 +4474,7 @@
     color: '#ffffff',
     alpha: 1,
   });
-  
+
   const HUD_INFO_ROWS = [
     { key: 'score', label: 'Score', show: 'showScore', mode: 'scoreMode', format: hudInfoFormatScoreValue, color: (data) => hudInfoColorForMass(data.score) },
     { key: 'fps', label: 'FPS', show: 'showFps', mode: 'fpsMode', format: hudInfoFormatFpsValue, color: (data) => hudInfoColorForFps(data.fps) },
@@ -4482,22 +4482,22 @@
     { key: 'cells', label: 'Cells', show: 'showCells', format: hudInfoFormatCellsValue, color: () => HUD_INFO_MASS_COLORS.green },
     { key: 'boosters', label: '', show: 'showBoosters', booster: true },
   ];
-  
+
   function pageHudInfoBootstrap(initialSettings, pageWindow = globalThis) {
     const win = pageWindow;
     const doc = win.document;
     const socketSendTimes = typeof win.WeakMap === 'function' ? new win.WeakMap() : null;
-  
+
     if (!doc || win.location?.hostname !== HUD_INFO_CUSTOM_HOST) {
       return false;
     }
-  
+
     if (win.__blobioHudInfoInstalled) {
       win.__blobioHudInfoRefresh?.(initialSettings);
       return true;
     }
     win.__blobioHudInfoInstalled = true;
-  
+
     const state = {
       startedAt: Date.now(),
       patchApplied: false,
@@ -4551,7 +4551,7 @@
       originalAppendChild: null,
       originalInsertBefore: null,
     };
-  
+
     exposeApi();
     installWebSocketPingProbe();
     startPingProbeTimer();
@@ -4561,13 +4561,13 @@
     startUi();
     win.addEventListener?.('resize', schedulePosition, { passive: true });
     return true;
-  
+
     function refresh(nextSettings) {
       state.settings = normalizeHudInfoSettings(nextSettings);
       renderHud();
       schedulePosition();
     }
-  
+
     function exposeApi() {
       win.__BlobioHudInfoUpdate = updateFromGame;
       win.__BlobioHudInfoCells = updateCellsFromGame;
@@ -4580,7 +4580,7 @@
       win.__BlobioHudInfoDebug = debugReport;
       win.BlobioHudInfoDebug = debugReport;
     }
-  
+
     function startUi() {
       const install = () => {
         ensureStyle();
@@ -4588,7 +4588,7 @@
         renderHud();
         positionHud();
       };
-  
+
       if (doc.body) {
         install();
       } else {
@@ -4596,18 +4596,18 @@
         win.setTimeout?.(install, 0);
       }
     }
-  
+
     function ensureHud() {
       if (state.root?.parentNode) {
         return;
       }
-  
+
       const root = doc.createElement('div');
       root.classList.add('blobio-hud-info-root');
-  
+
       const output = doc.createElement('div');
       output.classList.add('blobio-hud-info-output');
-  
+
       const rows = {};
       for (const row of HUD_INFO_ROWS) {
         const parts = createHudRow(row.key);
@@ -4617,32 +4617,32 @@
         rows[`${row.key}Separator`] = parts.separator;
         output.appendChild(parts.row);
       }
-  
+
       root.appendChild(output);
       (doc.body || doc.documentElement).appendChild(root);
       state.root = root;
       state.rows = rows;
     }
-  
+
     function createHudRow(name) {
       const row = doc.createElement('div');
       row.classList.add('blobio-hud-info-row');
       row.dataset.row = name;
-  
+
       const label = doc.createElement('span');
       label.classList.add('blobio-hud-info-label');
-  
+
       const value = doc.createElement('span');
       value.classList.add('blobio-hud-info-value');
-  
+
       const separator = doc.createElement('span');
       separator.classList.add('blobio-hud-info-separator');
       separator.textContent = '|';
-  
+
       row.append(label, value, separator);
       return { row, label, value, separator };
     }
-  
+
     function scheduleRender() {
       if (state.renderFrame !== null) {
         return;
@@ -4653,12 +4653,12 @@
         renderHud();
       });
     }
-  
+
     function renderHud() {
       if (!state.rows || !state.root) {
         return;
       }
-  
+
       expirePingIfStale(Date.now(), false);
       const settings = state.settings;
       const data = state.latest;
@@ -4666,25 +4666,25 @@
       const nextSettingsKey = hudInfoRenderSettingsKey(settings, fontFamily, data);
       const nextDataKey = hudInfoRenderDataKey(data, settings);
       const hasData = state.dataUpdates > 0;
-  
+
       state.root.hidden = !settings.enabled;
       if (!settings.enabled) {
         return;
       }
-  
+
       if (state.renderSettingsKey !== nextSettingsKey) {
         state.renderSettingsKey = nextSettingsKey;
         renderHudSettings(settings, fontFamily, data);
       }
-  
+
       if (state.renderDataKey !== nextDataKey) {
         state.renderDataKey = nextDataKey;
         renderHudValues(data, settings);
       }
-  
+
       hudInfoToggleClass(state.root, 'has-data', hasData);
     }
-  
+
     function renderHudSettings(settings, fontFamily, data) {
       const separatorItems = [];
       const visibleRows = HUD_INFO_ROWS.map((row) => ({
@@ -4709,7 +4709,7 @@
       state.root.style.setProperty('--blobio-hud-color-a', hudInfoRgbaFromSettings(settings));
       state.root.style.setProperty('--blobio-hud-font-size', `${settings.fontSize}px`);
       state.root.style.setProperty('--blobio-hud-font', fontFamily);
-  
+
       for (const { row, visible } of visibleRows) {
         hudInfoSetRowVisible(state.rows[row.key], visible);
         hudInfoSetText(state.rows[`${row.key}Label`], hudInfoLabelTextFor(row.label, settings));
@@ -4718,7 +4718,7 @@
       hudInfoUpdateSeparators(separatorItems, settings);
       schedulePosition();
     }
-  
+
     function renderHudValues(data, settings) {
       const useValueColors = settings.styleMode === 'simple';
       for (const row of HUD_INFO_ROWS) {
@@ -4731,31 +4731,31 @@
         hudInfoSetStyleColor(valueNode, useValueColors ? row.color(data) : '');
       }
     }
-  
+
     function renderBoosterValue(valueNode, boosters, settings) {
       if (!valueNode) {
         return;
       }
-  
+
       valueNode.textContent = '';
       hudInfoSetStyleColor(valueNode, '');
-  
+
       const active = hudInfoVisibleBoosters({ boosters });
       if (!active.length) {
         return;
       }
-  
+
       appendBoosterText(valueNode, '[', 'blobio-hud-info-booster-punctuation');
       active.forEach((booster, index) => {
         if (index > 0) {
           appendBoosterText(valueNode, ', ', 'blobio-hud-info-booster-punctuation');
         }
-  
+
         const name = appendBoosterText(valueNode, `${booster.type}:`, 'blobio-hud-info-booster-name');
         name.classList.add(settings.boosterNameMode === 'simple'
           ? HUD_INFO_BOOSTER_NAME_CLASSES[booster.type]
           : 'is-solid-color');
-  
+
         const duration = appendBoosterText(valueNode, ` ${hudInfoNumberText(booster.seconds)}s`, 'blobio-hud-info-booster-duration');
         if (settings.boosterDurationMode === 'simple') {
           duration.classList.add(hudInfoBoosterDurationClass(booster));
@@ -4766,7 +4766,7 @@
       });
       appendBoosterText(valueNode, ']', 'blobio-hud-info-booster-punctuation');
     }
-  
+
     function appendBoosterText(parent, text, className) {
       const span = doc.createElement('span');
       span.classList.add(className);
@@ -4774,7 +4774,7 @@
       parent.appendChild(span);
       return span;
     }
-  
+
     function debugReport() {
       const boosterRow = state.rows?.boosters || null;
       const boosterValue = state.rows?.boostersValue || null;
@@ -4807,7 +4807,7 @@
         },
       };
     }
-  
+
     function getChatFontFamily() {
       try {
         const chat = doc.querySelector?.('#chat');
@@ -4818,7 +4818,7 @@
       } catch {}
       return 'Ubuntu, Arial, sans-serif';
     }
-  
+
     function schedulePosition() {
       if (state.positionFrame !== null) {
         return;
@@ -4829,12 +4829,12 @@
         positionHud();
       });
     }
-  
+
     function positionHud() {
       if (!state.root?.parentNode) {
         return;
       }
-  
+
       const mode = state.settings.positionMode;
       const anchor = hudInfoPositionAnchor(mode);
       const isBottom = hudInfoIsBottomPosition(mode);
@@ -4844,7 +4844,7 @@
       state.root.style.right = anchor === 'right' ? '12px' : 'auto';
       state.root.style.transform = anchor === 'center' ? 'translateX(-50%)' : 'none';
     }
-  
+
     function updateFromGame(score, fps, replayEnded) {
       const now = Date.now();
       const nextScore = Math.max(0, Math.round(Number(score) || 0));
@@ -4855,7 +4855,7 @@
       state.latest.replayEnded = Boolean(replayEnded);
       state.latest.frameTime = nextFps > 0 ? 1000 / nextFps : 0;
       state.latest.averageScore = hudInfoAverageMass(nextScore, state.latest.cells);
-  
+
       if (now - state.lastSampleAt >= HUD_INFO_SAMPLE_INTERVAL_MS) {
         state.lastSampleAt = now;
         hudInfoPushSample(state.fpsSamples, nextFps);
@@ -4864,7 +4864,7 @@
       }
       scheduleRender();
     }
-  
+
     function updateCellsFromGame(cells) {
       const count = Math.max(0, Math.round(Number(cells) || 0));
       if (state.latest.cells === count) {
@@ -4874,13 +4874,13 @@
       state.latest.averageScore = hudInfoAverageMass(state.latest.score, count);
       scheduleRender();
     }
-  
+
     function updateBoostersFromSource(source, sourceName = 'game') {
       const now = Date.now();
       if (sourceName === 'game') {
         state.lastBoosterGameAt = now;
       }
-  
+
       const boosters = hudInfoApplyBoosterDurations(hudInfoParseBoosters(source), state.boosterDurations, now);
       if (hudInfoBoostersDataKey(state.latest.boosters) === hudInfoBoostersDataKey(boosters)) {
         return;
@@ -4888,18 +4888,18 @@
       state.latest.boosters = boosters;
       scheduleRender();
     }
-  
+
     function sampleBoostersFromDom(now = Date.now()) {
       if (now - state.lastBoosterGameAt < HUD_INFO_BOOSTER_GAME_STALE_MS) {
         return;
       }
-  
+
       const text = hudInfoFindBoosterTextInDom(doc);
       if (text || state.latest.boosters.length) {
         updateBoostersFromSource(text || [], 'dom');
       }
     }
-  
+
     function updatePingFromSocket(ping, source = 'passive') {
       const number = Number(ping);
       if (!Number.isFinite(number) || number <= 0 || number > 5000) {
@@ -4918,7 +4918,7 @@
       schedulePingExpiry();
       scheduleRender();
     }
-  
+
     function expirePingIfStale(now = Date.now(), shouldRender = true) {
       if (!state.latest.ping || !state.latest.pingUpdatedAt) {
         return false;
@@ -4936,7 +4936,7 @@
       }
       return true;
     }
-  
+
     function schedulePingExpiry() {
       if (state.pingStaleTimer !== null) {
         win.clearTimeout?.(state.pingStaleTimer);
@@ -4947,7 +4947,7 @@
         expirePingIfStale(Date.now(), true);
       }, HUD_INFO_PING_STALE_MS + 50) ?? null;
     }
-  
+
     function expectedSocketTarget() {
       const search = String(win.location?.search || '');
       try {
@@ -4959,13 +4959,13 @@
         return match ? decodeURIComponent(match[1].replace(/\+/g, ' ')) : '';
       }
     }
-  
+
     function isGameSocketUrl(url) {
       const text = String(url || '');
       const target = expectedSocketTarget();
       return target ? text.includes(target) : /^wss?:\/\//i.test(text);
     }
-  
+
     function guessedSocketUrl() {
       const target = expectedSocketTarget();
       if (!target) {
@@ -4973,11 +4973,11 @@
       }
       return `${win.location?.protocol === 'https:' ? 'wss' : 'ws'}://${target}`;
     }
-  
+
     function probeSocketUrl() {
       return guessedSocketUrl() || state.gameSocketUrl || '';
     }
-  
+
     function startPingProbeTimer() {
       if (state.pingProbeTimer !== null || typeof state.nativeWebSocket !== 'function') {
         return;
@@ -4986,7 +4986,7 @@
       state.pingProbeTimer = win.setInterval?.(runProbe, HUD_INFO_PING_PROBE_INTERVAL_MS) ?? null;
       runProbe();
     }
-  
+
     function probeServerPing() {
       const url = probeSocketUrl();
       if (state.pingProbeInFlight || !url || typeof state.nativeWebSocket !== 'function') {
@@ -5013,20 +5013,20 @@
           socket?.close?.(1000, 'blobio-hud-ping');
         } catch {}
       };
-  
+
       try {
         socket = new state.nativeWebSocket(url);
       } catch {
         state.pingProbeInFlight = false;
         return;
       }
-  
+
       timeout = win.setTimeout?.(() => finish(null), HUD_INFO_PING_PROBE_TIMEOUT_MS);
       socket.addEventListener?.('open', () => finish(hudInfoNowMs() - startedAt), { once: true });
       socket.addEventListener?.('error', () => finish(null), { once: true });
       socket.addEventListener?.('close', () => finish(null), { once: true });
     }
-  
+
     function rememberGameSocket(url, protocols) {
       if (!isGameSocketUrl(url)) {
         return false;
@@ -5036,20 +5036,20 @@
       startPingProbeTimer();
       return true;
     }
-  
+
     function installWebSocketPingProbe() {
       const NativeWebSocket = win.WebSocket;
       if (typeof NativeWebSocket !== 'function' || NativeWebSocket.__blobioHudInfoWrapped) {
         return;
       }
       state.nativeWebSocket = NativeWebSocket;
-  
+
       function BlobioHudInfoWebSocket(url, protocols) {
         const socket = protocols === undefined ? new NativeWebSocket(url) : new NativeWebSocket(url, protocols);
         monitorSocket(socket, url, protocols);
         return socket;
       }
-  
+
       try {
         Object.setPrototypeOf(BlobioHudInfoWebSocket, NativeWebSocket);
       } catch {}
@@ -5066,7 +5066,7 @@
       BlobioHudInfoWebSocket.__blobioHudInfoWrapped = true;
       win.WebSocket = BlobioHudInfoWebSocket;
     }
-  
+
     function monitorSocket(socket, url, protocols) {
       if (!socket || socket.__blobioHudInfoMonitored || !isGameSocketUrl(url)) {
         return;
@@ -5074,15 +5074,15 @@
       rememberGameSocket(url, protocols);
       socket.__blobioHudInfoMonitored = true;
     }
-  
+
     function noteGameSocketOpening(url, protocols) {
       rememberGameSocket(url, protocols);
     }
-  
+
     function noteGameSocketCreated(socket, url, protocols) {
       monitorSocket(socket, url, protocols);
     }
-  
+
     function noteGameSocketSend(socket) {
       const sentAt = hudInfoNowMs();
       if (socketSendTimes && socket) {
@@ -5093,7 +5093,7 @@
         socket.__blobioHudInfoLastSendAt = sentAt;
       } catch {}
     }
-  
+
     function noteGameSocketMessage(socket) {
       let sentAt = 0;
       if (socketSendTimes && socket) {
@@ -5109,12 +5109,12 @@
         updatePingFromSocket(hudInfoNowMs() - sentAt, 'passive');
       }
     }
-  
+
     function patchGameCode(code) {
       if (typeof code !== 'string') {
         return { code, changed: false };
       }
-  
+
       let patched = code;
       let changed = false;
       const result = {
@@ -5133,7 +5133,7 @@
       const boosterDrawPattern = /[A-Za-z_$][\w$]*\(a\.c,a\.a,d\.([A-Za-z_$][\w$]*)\(\),\$b\.a\.width\*[A-Za-z_$][\w$]*,\$b\.a\.height-10-c\*20\)/;
       const boosterPattern = /function ([A-Za-z_$][\w$]*)\(a,b\)\{var c,d;bt\(a\.a\);for\(c=0;c<b\.length;c\+\+\)\{d=b\[c\];if\(!d\)\{break\}[A-Za-z_$][\w$]*\(a\.c,a\.a,d\.([A-Za-z_$][\w$]*)\(\),\$b\.a\.width\*[A-Za-z_$][\w$]*,\$b\.a\.height-10-c\*20\)\}jt\(a\.a\)\}/;
       const boosterReplacementFor = (name, textMethod) => `function ${name}(a,b){var c,d,e,f;f=[];bt(a.a);for(c=0;c<b.length;c++){d=b[c];if(!d){break}e=d.${textMethod}();f[f.length]=e}$wnd.__BlobioHudInfoBoosters&&$wnd.__BlobioHudInfoBoosters(f);jt(a.a)}`;
-  
+
       result.boosterNeedlePresent = patched.includes(boosterNeedle);
       const boosterDrawMatch = patched.match(boosterDrawPattern);
       result.boosterDrawPresent = Boolean(boosterDrawMatch);
@@ -5158,7 +5158,7 @@
           }
         }
       }
-  
+
       const hudNeedle = "function Tqe(a){var b;bt(a.a);b=((Yse(),Qse)?'Replay: ':'Score: ')+((sxe(),qxe).g/100|0);if(Nye(qxe.f,(Ize(),zze))){Wqe(a);b=_Ee(b,' | '+y1d(a.d)+' fps')}qxe.I.d&&(b='Replay ended');Gm(a.c,a.a,b,10,$b.a.height-10);jt(a.a)}";
       const hudReplacement = "function Tqe(a){var b;bt(a.a);b=((sxe(),qxe).g/100|0);Wqe(a);$wnd.__BlobioHudInfoUpdate&&$wnd.__BlobioHudInfoUpdate(b,y1d(a.d),qxe.I.d?1:0);jt(a.a)}";
       if (patched.includes(hudNeedle) && !patched.includes('__BlobioHudInfoUpdate')) {
@@ -5166,7 +5166,7 @@
         changed = true;
         result.hudPatched = true;
       }
-  
+
       const cellsNeedle = "function zxe(a){var b,c,d,e,f,g,h;g=0;b=0;h=TIe(a.A.a);for(d=(f=(new JJe(a.A.a)).a.iX().Rd(),new PJe(f));d.a.Td();){c=(e=d.a.Ud(),e.WX());g+=c.w*c.w;b+=c.w}a.g=g;h>1&&(a.a=b/h|0)}";
       const cellsReplacement = "function zxe(a){var b,c,d,e,f,g,h;g=0;b=0;h=TIe(a.A.a);for(d=(f=(new JJe(a.A.a)).a.iX().Rd(),new PJe(f));d.a.Td();){c=(e=d.a.Ud(),e.WX());g+=c.w*c.w;b+=c.w}a.g=g;h>1&&(a.a=b/h|0);$wnd.__BlobioHudInfoCells&&$wnd.__BlobioHudInfoCells(h)}";
       if (patched.includes(cellsNeedle) && !patched.includes('__BlobioHudInfoCells')) {
@@ -5174,7 +5174,7 @@
         changed = true;
         result.cellsPatched = true;
       }
-  
+
       const socketNeedle = "function kxe(e,b,c){var d=e;d.ws&&d.ws.close(X0e);d.ws=new WebSocket(b,c);d.ws.onopen=function(){d.uW()};d.ws.binaryType=xsf;d.ws.onclose=function(a){d.qW(a.code,a.reason)};d.ws.onerror=function(a){d.rW(a.type,a.toString())};d.ws.onmessage=function(a){typeof a.data==USe?d.tW(a.data):d.sW(a.data)}}";
       const socketReplacement = "function kxe(e,b,c){var d=e;$wnd.__BlobioHudInfoSocketOpening&&$wnd.__BlobioHudInfoSocketOpening(b,c);d.ws&&d.ws.close(X0e);d.ws=new WebSocket(b,c);$wnd.__BlobioHudInfoSocketCreated&&$wnd.__BlobioHudInfoSocketCreated(d.ws,b,c);d.ws.onopen=function(){d.uW()};d.ws.binaryType=xsf;d.ws.onclose=function(a){d.qW(a.code,a.reason)};d.ws.onerror=function(a){d.rW(a.type,a.toString())};d.ws.onmessage=function(a){$wnd.__BlobioHudInfoSocketMessage&&$wnd.__BlobioHudInfoSocketMessage(d.ws);typeof a.data==USe?d.tW(a.data):d.sW(a.data)}}";
       if (patched.includes(socketNeedle) && !patched.includes('__BlobioHudInfoSocketCreated')) {
@@ -5182,7 +5182,7 @@
         changed = true;
         result.socketPatched = true;
       }
-  
+
       const socketSendNeedle = "_.pW=function BVd(b){var c,d,e;d=fme(b.length);c=new Int8Array(d);c.set(b,0);try{this.ws&&this.ws.send(d)}catch(a){a=Yke(a);if(q1d(a,36)){e=a;throw Zke(new fVd(e))}else throw Zke(a)}};";
       const socketSendReplacement = "_.pW=function BVd(b){var c,d,e;d=fme(b.length);c=new Int8Array(d);c.set(b,0);try{this.ws&&($wnd.__BlobioHudInfoSocketSend&&$wnd.__BlobioHudInfoSocketSend(this.ws),this.ws.send(d))}catch(a){a=Yke(a);if(q1d(a,36)){e=a;throw Zke(new fVd(e))}else throw Zke(a)}};";
       if (patched.includes(socketSendNeedle) && !patched.includes('__BlobioHudInfoSocketSend')) {
@@ -5190,14 +5190,14 @@
         changed = true;
         result.socketSendPatched = true;
       }
-  
+
       state.patch.lastResult = { ...result, changed };
       if (result.boosterNeedlePresent || result.boosterDrawPresent || result.boosterPatched) {
         state.patch.lastBoosterResult = state.patch.lastResult;
       }
       return { code: patched, changed };
     }
-  
+
     function patchDownloadedChunk(chunk) {
       state.patch.seenChunks += 1;
       const result = patchGameCode(chunk);
@@ -5212,7 +5212,7 @@
       }
       return result.code;
     }
-  
+
     function installGwtPatch() {
       const html = win.html;
       if (!html || html.__blobioHudInfoWrapped || typeof html.onScriptDownloaded !== 'function') {
@@ -5229,7 +5229,7 @@
       state.patch.wrappedCallback = true;
       return true;
     }
-  
+
     function installScriptObserver() {
       const NodeCtor = win.Node;
       if (!NodeCtor?.prototype || NodeCtor.prototype.__blobioHudInfoNodePatch) {
@@ -5237,14 +5237,14 @@
       }
       state.originalAppendChild = NodeCtor.prototype.appendChild;
       state.originalInsertBefore = NodeCtor.prototype.insertBefore;
-  
+
       NodeCtor.prototype.appendChild = function blobioHudInfoAppendChild(node) {
         if (node?.tagName === 'SCRIPT') {
           installGwtPatch();
         }
         return state.originalAppendChild.call(this, node);
       };
-  
+
       NodeCtor.prototype.insertBefore = function blobioHudInfoInsertBefore(node, child) {
         if (node?.tagName === 'SCRIPT') {
           installGwtPatch();
@@ -5253,7 +5253,7 @@
       };
       NodeCtor.prototype.__blobioHudInfoNodePatch = true;
     }
-  
+
     function startPatchTimer() {
       const timer = win.setInterval?.(() => {
         if (installGwtPatch() || Date.now() - state.startedAt > 30000) {
@@ -5261,7 +5261,7 @@
         }
       }, 50);
     }
-  
+
     function ensureStyle() {
       if (state.styleNode?.parentNode) {
         return;
@@ -5401,7 +5401,7 @@
       state.styleNode = style;
     }
   }
-  
+
   function normalizeHudInfoSettings(settings = {}) {
     const source = settings && typeof settings === 'object' ? settings : {};
     return {
@@ -5431,12 +5431,12 @@
       alpha: hudInfoClampNumber(source.alpha, 0, 1, DEFAULT_HUD_INFO_RUNTIME_SETTINGS.alpha),
     };
   }
-  
+
   function hudInfoNormalizeColor(value, fallback) {
     const color = String(value || '').trim().toLowerCase();
     return /^#[0-9a-f]{6}$/.test(color) ? color : fallback;
   }
-  
+
   function hudInfoClampNumber(value, min, max, fallback) {
     if (value === null || value === undefined || value === '') {
       return fallback;
@@ -5447,7 +5447,7 @@
     }
     return Math.max(min, Math.min(max, number));
   }
-  
+
   function hudInfoRgbaFromSettings(settings) {
     const clean = hudInfoNormalizeColor(settings.color, DEFAULT_HUD_INFO_RUNTIME_SETTINGS.color).slice(1);
     const red = Number.parseInt(clean.slice(0, 2), 16) || 0;
@@ -5455,40 +5455,40 @@
     const blue = Number.parseInt(clean.slice(4, 6), 16) || 0;
     return `rgba(${red}, ${green}, ${blue}, ${Math.round(settings.alpha * 1000) / 1000})`;
   }
-  
+
   function hudInfoNumberText(value) {
     const number = Math.round(Number(value) || 0);
     return number.toLocaleString('en-US');
   }
-  
+
   function hudInfoColorForMass(score) {
     const value = Number(score) || 0;
     if (value >= 40000) return HUD_INFO_MASS_COLORS.green;
     if (value >= 20000) return HUD_INFO_MASS_COLORS.yellow;
     return HUD_INFO_MASS_COLORS.red;
   }
-  
+
   function hudInfoColorForFps(fps) {
     const value = Number(fps) || 0;
     if (value >= 50) return HUD_INFO_MASS_COLORS.green;
     if (value >= 30) return HUD_INFO_MASS_COLORS.yellow;
     return HUD_INFO_MASS_COLORS.red;
   }
-  
+
   function hudInfoColorForPing(ping) {
     const value = Number(ping) || 0;
     if (value >= 70) return HUD_INFO_MASS_COLORS.red;
     if (value >= 20) return HUD_INFO_MASS_COLORS.yellow;
     return HUD_INFO_MASS_COLORS.green;
   }
-  
+
   function hudInfoFormatScoreValue(data, mode) {
     const score = hudInfoNumberText(data.score);
     return mode === 'advanced' || mode === 'dev'
       ? `${score} [${hudInfoNumberText(data.averageScore)}]`
       : score;
   }
-  
+
   function hudInfoFormatFpsValue(data, mode) {
     const fps = hudInfoNumberText(data.fps);
     if (mode === 'advanced') {
@@ -5499,7 +5499,7 @@
     }
     return fps;
   }
-  
+
   function hudInfoFormatPingValue(data, mode) {
     const hasPing = Number(data.ping) > 0;
     const ping = hasPing ? hudInfoNumberText(data.ping) : '--';
@@ -5513,21 +5513,21 @@
     }
     return ping;
   }
-  
+
   function hudInfoFormatCellsValue(data) {
     return hudInfoNumberText(data.cells);
   }
-  
+
   function hudInfoParseBoosters(source) {
     const values = Array.isArray(source) ? source : [source];
     const byType = new Map();
-  
+
     for (const value of values) {
       const text = hudInfoBoosterText(value);
       if (!text) {
         continue;
       }
-  
+
       HUD_INFO_BOOSTER_PATTERN.lastIndex = 0;
       let match = HUD_INFO_BOOSTER_PATTERN.exec(text);
       while (match) {
@@ -5539,12 +5539,12 @@
         match = HUD_INFO_BOOSTER_PATTERN.exec(text);
       }
     }
-  
+
     return HUD_INFO_BOOSTER_TYPES
       .map((type) => byType.get(type))
       .filter(Boolean);
   }
-  
+
   function hudInfoBoosterText(value) {
     if (value === null || value === undefined) {
       return '';
@@ -5561,7 +5561,7 @@
     }
     return String(value || '');
   }
-  
+
   function hudInfoApplyBoosterDurations(boosters, durations, now) {
     const activeTypes = new Set(boosters.map((booster) => booster.type));
     for (const type of Object.keys(durations)) {
@@ -5569,7 +5569,7 @@
         delete durations[type];
       }
     }
-  
+
     return boosters.map((booster) => {
       const previous = durations[booster.type];
       const reset = !previous || booster.seconds > previous.seconds + 2;
@@ -5587,18 +5587,18 @@
       };
     });
   }
-  
+
   function hudInfoFindBoosterTextInDom(doc) {
     const text = String(doc?.body?.innerText || doc?.body?.textContent || '');
     HUD_INFO_BOOSTER_PATTERN.lastIndex = 0;
     return HUD_INFO_BOOSTER_PATTERN.test(text) ? text : '';
   }
-  
+
   function hudInfoVisibleBoosters(data) {
     return (Array.isArray(data?.boosters) ? data.boosters : [])
       .filter((booster) => HUD_INFO_BOOSTER_TYPES.includes(booster.type) && Number(booster.seconds) > 0);
   }
-  
+
   function hudInfoBoosterDurationClass(booster) {
     const seconds = Number(booster.seconds) || 0;
     const total = Math.max(seconds, Number(booster.totalSeconds) || 0);
@@ -5610,20 +5610,20 @@
     }
     return 'is-duration-green';
   }
-  
+
   function hudInfoAverageMass(score, cells) {
     const count = Math.max(0, Math.round(Number(cells) || 0));
     return count ? Math.max(0, Math.round((Number(score) || 0) / count)) : Math.max(0, Math.round(Number(score) || 0));
   }
-  
+
   function hudInfoAverage(values) {
     return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
   }
-  
+
   function hudInfoMaxValue(values) {
     return values.length ? Math.max(...values) : 0;
   }
-  
+
   function hudInfoPushSample(samples, value) {
     const number = Number(value);
     if (!Number.isFinite(number)) {
@@ -5634,25 +5634,25 @@
       samples.splice(0, samples.length - HUD_INFO_MAX_SAMPLES);
     }
   }
-  
+
   function hudInfoHasAnyEnabled(settings) {
     return Boolean(settings.showScore || settings.showFps || settings.showPing || settings.showCells || settings.showBoosters);
   }
-  
+
   function hudInfoShouldUseTextShadow(settings) {
     return hudInfoHasAnyEnabled(settings) && (Number(settings.alpha) || 0) > 0;
   }
-  
+
   function hudInfoPositionAnchor(positionMode) {
     if (String(positionMode).endsWith('right')) return 'right';
     if (String(positionMode).endsWith('center')) return 'center';
     return 'left';
   }
-  
+
   function hudInfoIsBottomPosition(positionMode) {
     return String(positionMode).startsWith('bottom');
   }
-  
+
   function hudInfoLabelTextFor(label, settings) {
     if (!label) {
       return '';
@@ -5662,14 +5662,14 @@
     }
     return `${label}:`;
   }
-  
+
   function hudInfoIsRowVisible(row, settings, data) {
     if (!settings[row.show]) {
       return false;
     }
     return !row.booster || hudInfoVisibleBoosters(data).length > 0;
   }
-  
+
   function hudInfoRenderSettingsKey(settings, fontFamily = '', data = {}) {
     return [
       settings.enabled ? 1 : 0,
@@ -5683,7 +5683,7 @@
       fontFamily,
     ].join('|');
   }
-  
+
   function hudInfoRenderDataKey(data, settings) {
     return [
       settings.styleMode,
@@ -5705,25 +5705,25 @@
       hudInfoBoostersDataKey(data.boosters),
     ].join('|');
   }
-  
+
   function hudInfoBoostersDataKey(boosters) {
     return hudInfoVisibleBoosters({ boosters })
       .map((booster) => `${booster.type}:${booster.seconds}:${booster.totalSeconds || booster.seconds}`)
       .join(',');
   }
-  
+
   function hudInfoSetText(node, text) {
     if (node && node.textContent !== text) {
       node.textContent = text;
     }
   }
-  
+
   function hudInfoSetStyleColor(node, color) {
     if (node && node.style.color !== color) {
       node.style.color = color;
     }
   }
-  
+
   function hudInfoToggleClass(node, className, enabled) {
     if (node?.classList?.toggle) {
       node.classList.toggle(className, Boolean(enabled));
@@ -5733,12 +5733,12 @@
       node?.classList?.remove?.(className);
     }
   }
-  
+
   function hudInfoSetRowVisible(row, visible) {
     hudInfoToggleClass(row, 'is-hidden', !visible);
     row?.setAttribute?.('aria-hidden', String(!visible));
   }
-  
+
   function hudInfoUpdateSeparators(items, settings) {
     let lastVisible = null;
     for (const item of items) {
@@ -5750,7 +5750,7 @@
       hudInfoToggleClass(item.separator, 'is-visible', settings.layoutMode === 'line' && item.visible && item !== lastVisible);
     }
   }
-  
+
   function hudInfoNowMs() {
     const perf = globalThis.performance;
     return perf?.now ? perf.now() : Date.now();
@@ -5763,14 +5763,14 @@
   const EMOTE_SKIN_CANVAS_CLASS = 'blobio-emote-skin-overlay';
   const EMOTE_SKIN_PATCH_MARKER = '__BlobioSkinEmoteRenderCell';
   const EMOTE_SKIN_CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
-  
+
   function pageEmoteSkinBootstrap(initialConfig = {}, pageWindow = globalThis) {
     const win = pageWindow;
     const doc = win.document;
     if (!doc || win.location?.hostname !== EMOTE_SKIN_HOST) {
       return false;
     }
-  
+
     if (win.__blobioEmoteSkinInstalled) {
       win.__blobioEmoteSkinRefresh?.(initialConfig);
       if (typeof win.__BlobioSkinEmoteDebug === 'function') {
@@ -5780,7 +5780,7 @@
       return true;
     }
     win.__blobioEmoteSkinInstalled = true;
-  
+
     const state = {
       assets: normalizeAssets(initialConfig.assets),
       images: new Map(),
@@ -5805,12 +5805,12 @@
       lastTrigger: null,
       lastRender: null,
     };
-  
+
     exposeApi();
     installStyle();
     installGameScriptPatch();
     preloadImages();
-  
+
     if (win.__BLOBIO_EMOTE_SKIN_TEST__) {
       win.__BlobioEmoteSkinTestApi = {
         patchGameBundle,
@@ -5820,9 +5820,9 @@
         state,
       };
     }
-  
+
     return true;
-  
+
     function normalizeAssets(assets) {
       const source = assets && typeof assets === 'object' ? assets : {};
       const normalized = {};
@@ -5831,12 +5831,12 @@
       }
       return normalized;
     }
-  
+
     function refresh(nextConfig = {}) {
       state.assets = normalizeAssets(nextConfig.assets || state.assets);
       preloadImages();
     }
-  
+
     function exposeApi() {
       win.__blobioEmoteSkinRefresh = refresh;
       win.__BlobioSkinEmoteTrigger = triggerEmote;
@@ -5846,7 +5846,7 @@
       win.BlobioEmoteSkinDebug = debugReport;
       win.BlobioEmoteSkinRuntimeDebug = debugReport;
     }
-  
+
     function triggerEmote(event = {}) {
       state.counters.triggerAttempts += 1;
       const emoteId = normalizeEmoteId(event.emoteId);
@@ -5862,7 +5862,7 @@
         state.lastTrigger.reason = !emoteId ? 'unknown-emote-id' : 'missing-asset';
         return false;
       }
-  
+
       const expiresAt = Date.now() + clampDuration(event.durationMs);
       if (event.own) {
         state.ownEmote = { emoteId, expiresAt };
@@ -5871,51 +5871,51 @@
         state.lastTrigger.reason = 'own-emote';
         return true;
       }
-  
+
       const name = normalizeName(event.name);
       if (!name) {
         state.lastTrigger.reason = 'missing-name';
         return false;
       }
-  
+
       state.emotesByName.set(name, { emoteId, expiresAt });
       state.counters.triggerAccepted += 1;
       state.lastTrigger.accepted = true;
       state.lastTrigger.reason = 'remote-emote';
       return true;
     }
-  
+
     function normalizeEmoteId(value) {
       const id = String(value || '').trim().toLowerCase();
       return ['cool', 'nice', 'hi', 'yo', 'thx', 'why', 'pop', 'wink-pop'].includes(id) ? id : '';
     }
-  
+
     function assetKeyForEmote(emoteId) {
       return emoteId === 'wink-pop' ? 'pop' : emoteId;
     }
-  
+
     function clampDuration(value) {
       const duration = Number(value);
       return Number.isFinite(duration) ? Math.max(500, Math.min(15000, duration)) : EMOTE_SKIN_DURATION_MS;
     }
-  
+
     function normalizeName(value) {
       return String(value || '').replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
     }
-  
+
     function preloadImages() {
       for (const [key, url] of Object.entries(state.assets)) {
         if (!url || state.images.get(key)?.src === url) {
           continue;
         }
-  
+
         const image = new win.Image();
         image.decoding = 'async';
         image.src = url;
         state.images.set(key, image);
       }
     }
-  
+
     function beginFrame() {
       state.counters.beginFrames += 1;
       state.frameSeen = true;
@@ -5923,14 +5923,14 @@
       if (!ensureOverlay()) {
         return;
       }
-  
+
       const width = state.overlay.width;
       const height = state.overlay.height;
       if (width > 0 && height > 0) {
         state.context.clearRect(0, 0, width, height);
       }
     }
-  
+
     function renderCell(cellId, rawName, centerX, centerY, cellSize, radius, isOwn, projectionMatrix) {
       state.counters.renderCalls += 1;
       const active = findActiveEmote(rawName, isOwn);
@@ -5945,7 +5945,7 @@
         };
         return false;
       }
-  
+
       const x = Number(centerX);
       const y = Number(centerY);
       const r = Math.max(0, Number(radius) || Number(cellSize) / 2 || 0);
@@ -5961,7 +5961,7 @@
         };
         return false;
       }
-  
+
       const image = state.images.get(assetKeyForEmote(active.emoteId));
       if (!image || (!image.complete && !image.naturalWidth)) {
         state.lastRender = {
@@ -5974,7 +5974,7 @@
         };
         return false;
       }
-  
+
       const size = drawInfo.size;
       const drawX = drawInfo.x - size / 2;
       const drawY = drawInfo.y - size / 2;
@@ -5997,12 +5997,12 @@
       };
       return true;
     }
-  
+
     function getCellDrawInfo(x, y, radius, cellSize, projectionMatrix) {
       if (!Number.isFinite(x) || !Number.isFinite(y)) {
         return null;
       }
-  
+
       const projected = projectWorldPoint(x, y, projectionMatrix);
       if (projected) {
         const measureRadius = Math.max(0, radius || cellSize / 2 || 0);
@@ -6019,7 +6019,7 @@
           projected: true,
         };
       }
-  
+
       return {
         x,
         y,
@@ -6027,14 +6027,14 @@
         projected: false,
       };
     }
-  
+
     function projectWorldPoint(x, y, projectionMatrix) {
       const matrix = getMatrixValues(projectionMatrix);
       const viewport = getOverlayViewport();
       if (!matrix || viewport.width <= 0 || viewport.height <= 0) {
         return null;
       }
-  
+
       const clipX = matrix[0] * x + matrix[4] * y + matrix[12];
       const clipY = matrix[1] * x + matrix[5] * y + matrix[13];
       const clipW = matrix[3] * x + matrix[7] * y + matrix[15];
@@ -6044,18 +6044,18 @@
       if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY)) {
         return null;
       }
-  
+
       return {
         x: (ndcX + 1) * 0.5 * viewport.width,
         y: (1 - ndcY) * 0.5 * viewport.height,
       };
     }
-  
+
     function getMatrixValues(value) {
       const matrix = value?.a || value;
       return matrix && typeof matrix.length === 'number' && matrix.length >= 16 ? matrix : null;
     }
-  
+
     function getOverlayViewport() {
       const rect = state.targetCanvas?.getBoundingClientRect?.();
       return {
@@ -6063,36 +6063,36 @@
         height: Number(rect?.height) || parseCssPixels(state.overlay?.style?.height) || Number(win.innerHeight) || 0,
       };
     }
-  
+
     function parseCssPixels(value) {
       const number = Number.parseFloat(String(value || ''));
       return Number.isFinite(number) ? number : 0;
     }
-  
+
     function findActiveEmote(rawName, isOwn) {
       const now = Date.now();
       if (isOwn && state.ownEmote?.expiresAt > now) {
         return state.ownEmote;
       }
-  
+
       const name = normalizeName(rawName);
       const remote = name ? state.emotesByName.get(name) : null;
       return remote?.expiresAt > now ? remote : null;
     }
-  
+
     function expireEmotes() {
       const now = Date.now();
       if (state.ownEmote?.expiresAt <= now) {
         state.ownEmote = null;
       }
-  
+
       for (const [name, emote] of state.emotesByName) {
         if (emote.expiresAt <= now) {
           state.emotesByName.delete(name);
         }
       }
     }
-  
+
     function fadeFor(expiresAt) {
       const remaining = expiresAt - Date.now();
       if (remaining >= 450) {
@@ -6100,7 +6100,7 @@
       }
       return Math.max(0, Math.min(1, remaining / 450));
     }
-  
+
     function isPointNearViewport(x, y, radius) {
       const margin = Math.max(80, Math.min(240, radius + 80));
       const viewport = getOverlayViewport();
@@ -6108,13 +6108,13 @@
       const height = viewport.height || Number(win.innerHeight) || 0;
       return x + margin >= 0 && y + margin >= 0 && x - margin <= width && y - margin <= height;
     }
-  
+
     function ensureOverlay() {
       const canvas = findTargetCanvas();
       if (!canvas) {
         return false;
       }
-  
+
       if (!state.overlay?.parentNode) {
         const overlay = doc.createElement('canvas');
         overlay.classList.add(EMOTE_SKIN_CANVAS_CLASS);
@@ -6123,20 +6123,20 @@
         state.overlay = overlay;
         state.context = overlay.getContext('2d');
       }
-  
+
       if (!state.context) {
         return false;
       }
-  
+
       alignOverlay(canvas);
       return true;
     }
-  
+
     function findTargetCanvas() {
       const canvases = Array.from(doc.querySelectorAll?.('canvas') || []);
       let best = null;
       let bestArea = 0;
-  
+
       for (const canvas of canvases) {
         if (canvas === state.overlay || canvas.classList?.contains?.(EMOTE_SKIN_CANVAS_CLASS)) {
           continue;
@@ -6148,46 +6148,46 @@
           bestArea = area;
         }
       }
-  
+
       state.targetCanvas = best;
       return best;
     }
-  
+
     function alignOverlay(canvas) {
       const rect = canvas.getBoundingClientRect?.();
       if (!rect) {
         return;
       }
-  
+
       const dpr = Math.max(1, Number(win.devicePixelRatio) || 1);
       const cssWidth = Math.max(1, Math.round(Number(rect.width) || Number(canvas.clientWidth) || 1));
       const cssHeight = Math.max(1, Math.round(Number(rect.height) || Number(canvas.clientHeight) || 1));
       const width = Math.round(cssWidth * dpr);
       const height = Math.round(cssHeight * dpr);
-  
+
       if (state.overlay.width !== width || state.overlay.height !== height) {
         state.overlay.width = width;
         state.overlay.height = height;
         state.context.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
-  
+
       state.overlay.style.left = `${Math.round(rect.left)}px`;
       state.overlay.style.top = `${Math.round(rect.top)}px`;
       state.overlay.style.width = `${cssWidth}px`;
       state.overlay.style.height = `${cssHeight}px`;
     }
-  
+
     function installStyle() {
       if (doc.getElementById?.('blobio-emote-skin-overlay-style')) {
         return;
       }
-  
+
       const style = doc.createElement('style');
       style.id = 'blobio-emote-skin-overlay-style';
       style.textContent = `.${EMOTE_SKIN_CANVAS_CLASS}{position:fixed;left:0;top:0;z-index:2147482600;pointer-events:none}`;
       (doc.head || doc.documentElement).appendChild(style);
     }
-  
+
     function installGameScriptPatch() {
       const wrapped = wrapScriptDownloaded();
       patchExistingCacheScripts();
@@ -6201,12 +6201,12 @@
           win.setTimeout?.(() => win.clearInterval?.(callbackPatchTimer), 30000);
         }
       }
-  
+
       const NodeCtor = win.Node;
       if (!NodeCtor?.prototype || NodeCtor.prototype.__blobioEmoteSkinNodePatch) {
         return;
       }
-  
+
       const nativeAppendChild = NodeCtor.prototype.appendChild;
       const nativeInsertBefore = NodeCtor.prototype.insertBefore;
       NodeCtor.prototype.appendChild = function blobioEmoteSkinAppendChild(node) {
@@ -6219,18 +6219,18 @@
       };
       NodeCtor.prototype.__blobioEmoteSkinNodePatch = true;
     }
-  
+
     function patchExistingCacheScripts() {
       for (const script of doc.querySelectorAll?.('script[src], script') || []) {
         patchScriptNode(script);
       }
     }
-  
+
     function patchScriptNode(node) {
       if (!node || String(node.tagName || '').toLowerCase() !== 'script') {
         return;
       }
-  
+
       const src = String(node.src || node.getAttribute?.('src') || '');
       if (src && !EMOTE_SKIN_CACHE_SCRIPT_RE.test(src)) {
         return;
@@ -6238,7 +6238,7 @@
       if (src) {
         state.seenCacheScripts += 1;
       }
-  
+
       if (typeof node.textContent === 'string' && node.textContent.includes('function ose(a)')) {
         const result = patchGameBundle(node.textContent);
         state.lastPatchResult = compactPatchResult(result);
@@ -6248,13 +6248,13 @@
         }
       }
     }
-  
+
     function wrapScriptDownloaded() {
       const html = win.html;
       if (!html || html.__blobioEmoteSkinWrapped || typeof html.onScriptDownloaded !== 'function') {
         return false;
       }
-  
+
       const native = html.onScriptDownloaded;
       html.onScriptDownloaded = function blobioEmoteSkinOnScriptDownloaded(chunks) {
         if (Array.isArray(chunks)) {
@@ -6276,7 +6276,7 @@
       state.wrappedCallback = true;
       return true;
     }
-  
+
     function patchGameBundle(source) {
       if (typeof source !== 'string') {
         return { source, changed: false, reason: 'not-a-string' };
@@ -6284,7 +6284,7 @@
       if (source.includes(EMOTE_SKIN_PATCH_MARKER)) {
         return { source, changed: false, reason: 'already-patched' };
       }
-  
+
       let patched = source;
       const frameStart = 'function ose(a){var b,c,d,e,f,g,h;for(e=0;e<(sxe(),qxe).d.a.length;e++){';
       if (patched.includes(frameStart)) {
@@ -6293,24 +6293,24 @@
           'function ose(a){$wnd.__BlobioSkinEmoteBeginFrame&&$wnd.__BlobioSkinEmoteBeginFrame();var b,c,d,e,f,g,h;for(e=0;e<(sxe(),qxe).d.a.length;e++){',
         );
       }
-  
+
       const renderNeedle = 'Mm(a.i,g.u?a.b:g.r?a.a:a.B);if(Nye(qxe.f,(Ize(),Gze))&&g.B!=null){';
       if (!patched.includes(renderNeedle)) {
         return { source, changed: false, reason: 'renderer-block-not-found' };
       }
-  
+
       patched = patched.replace(
         renderNeedle,
         'if($wnd.__BlobioSkinEmoteRenderCell){$wnd.__BlobioSkinEmoteRenderCell(g.n,g.B,g.R,g.S,g.N,g.M,g.p,a.c&&a.c.g&&a.c.g.a)}'
           + renderNeedle,
       );
-  
+
       if (patched === source) {
         return { source, changed: false, reason: 'replace-failed' };
       }
       return { source: patched, changed: true, reason: 'patched' };
     }
-  
+
     function compactPatchResult(result) {
       return {
         changed: Boolean(result.changed),
@@ -6318,7 +6318,7 @@
         sourceLength: typeof result.source === 'string' ? result.source.length : 0,
       };
     }
-  
+
     function debugReport() {
       return {
         installed: true,
@@ -6366,12 +6366,12 @@
     if (host && host !== 'custom.client.blobgame.io' && host !== 'blobgame.io') {
       return false;
     }
-  
+
     if (win.__blobioCellMassInstalled) {
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-  
+
     const SCRIPT_VERSION = '0.1.8';
     const CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = 'BlobioCellMassDraw';
@@ -6381,10 +6381,10 @@
     const MAX_LABEL_HEIGHT = 0.32;
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2000;
-  
+
     let settings = normalizeSettings(initialSettings);
     let lastCacheSweep = 0;
-  
+
     const labelCache = new Map();
     const visiblePlayers = new Map();
     const state = {
@@ -6412,7 +6412,7 @@
       lastDrawCapture: null,
       errors: [],
     };
-  
+
     win.__blobioCellMassInstalled = true;
     win.__blobioCellMassState = state;
     win[DRAW_HOOK_NAME] = drawCellMassLabel;
@@ -6424,7 +6424,7 @@
     win.BlobioVisiblePlayers = getVisiblePlayers;
     win.__BlobioVisiblePlayers = getVisiblePlayers;
     win.__blobioCellMassCaptureDraw = captureDrawState;
-  
+
     if (win.__BLOBIO_CELL_MASS_TEST__) {
       win.__BlobioCellMassTestApi = {
         captureDrawState,
@@ -6436,10 +6436,10 @@
         refreshSettings,
       };
     }
-  
+
     installGameScriptPatch();
     return true;
-  
+
     function refreshSettings(nextSettings = {}) {
       const previous = settings;
       settings = normalizeSettings({
@@ -6447,25 +6447,25 @@
         ...(nextSettings || {}),
       });
       state.settings = settings;
-  
+
       if (
         previous.compact !== settings.compact
         || previous.updateDelayMs !== settings.updateDelayMs
       ) {
         labelCache.clear();
       }
-  
+
       return settings;
     }
-  
+
     function drawCellMassLabel(cellId, mass, rawSize, renderSize, cellSize, name, nameDrawn, nameScale, explicitFitScale, totalMass, worldX, worldY, cellType) {
       state.counters.drawHookCalls += 1;
-  
+
       if (!settings.enabled) {
         state.counters.hiddenBySetting += 1;
         return null;
       }
-  
+
       const safeMass = Math.max(0, Number(mass) || 0);
       const safeRawSize = Number(rawSize) || 0;
       const safeRenderSize = Number(renderSize) || safeRawSize;
@@ -6474,12 +6474,12 @@
         state.counters.hiddenByThreshold += 1;
         return null;
       }
-  
+
       if (safeMass <= 0 || Math.max(safeRawSize, safeRenderSize) < MIN_RENDER_SIZE) {
         state.counters.hiddenByThreshold += 1;
         return null;
       }
-  
+
       rememberVisiblePlayer(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, worldX, worldY, cellType);
 
       const autoMinMass = settings.smartRendering ? getAutoMinMass(totalMass) : 0;
@@ -6487,25 +6487,25 @@
         state.counters.hiddenBySmartLimit += 1;
         return null;
       }
-  
+
       const now = Date.now();
       sweepLabelCache(now);
       const textEntry = readMassText(cellId, safeMass, now);
       if (!textEntry.text) {
         return null;
       }
-  
+
       const fitScale = Number(explicitFitScale) > 0
         ? Number(explicitFitScale)
         : getFitScale(textEntry.text, safeName, nameScale, safeRenderSize);
       const primary = isPrimaryLabel(safeMass, safeRawSize, safeRenderSize, totalMass);
       let scale = clampNumber(fitScale * settings.textScale, 0.001, 1.4, settings.textScale);
-  
+
       if (primary) {
         scale = Math.max(scale, readableScaleFloor(safeRawSize, safeRenderSize));
         state.counters.primaryLabels += 1;
       }
-  
+
       const result = {
         text: textEntry.text,
         scale,
@@ -6516,13 +6516,13 @@
         cached: textEntry.cached,
         primary,
       };
-  
+
       state.counters.labelsDrawn += 1;
       state.lastLabel = cloneLabelResult(cellId, safeMass, result);
       rememberSample(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, Boolean(nameDrawn), result);
       return result;
     }
-  
+
     function rememberVisiblePlayer(cellId, mass, rawSize, renderSize, cellSize, name, worldX, worldY, cellType) {
       const key = String(cellId ?? `${name}:${Math.round(Number(worldX) || 0)}:${Math.round(Number(worldY) || 0)}`);
       const now = Date.now();
@@ -6564,7 +6564,7 @@
         state.counters.cacheHits += 1;
         return { text: cached.text, cached: true };
       }
-  
+
       const text = formatMass(mass);
       labelCache.set(key, {
         text,
@@ -6574,29 +6574,29 @@
       state.counters.labelUpdates += 1;
       return { text, cached: false };
     }
-  
+
     function formatMass(value) {
       const mass = Math.max(0, Number(value) || 0);
       if (!settings.compact) {
         return String(Math.round(mass));
       }
-  
+
       if (mass >= 1000000) {
         return `${trimNumber(mass / 1000000)}m`;
       }
-  
+
       if (mass >= 1000) {
         return `${trimNumber(mass / 1000)}k`;
       }
-  
+
       return String(Math.round(mass));
     }
-  
+
     function trimNumber(value) {
       const rounded = Math.round(value * 10) / 10;
       return rounded % 1 === 0 ? String(rounded | 0) : rounded.toFixed(1);
     }
-  
+
     function getAutoMinMass(totalMass) {
       const total = Number(totalMass) || 0;
       if (total > 15000) {
@@ -6610,30 +6610,30 @@
       }
       return 0;
     }
-  
+
     function getFitScale(text, name, nameScale, renderSize) {
       const textLength = Math.max(String(text || '').length, 3);
       const nameLength = Math.max(String(name || '').length, 3);
       const widestLength = Math.max(textLength, nameLength);
       const scale = Number(nameScale);
-  
+
       if (Number.isFinite(scale) && scale > 0) {
         return scale * (nameLength / widestLength);
       }
-  
+
       return Math.max(0.001, Number(renderSize) / (widestLength * 80));
     }
-  
+
     function isPrimaryLabel(mass, rawSize, renderSize, totalMass) {
       if (!settings.emphasizeBiggest) {
         return false;
       }
-  
+
       const total = Number(totalMass) || 0;
       const share = total > 0 ? mass / total : 0;
       return share >= 0.18 || Math.max(Number(rawSize) || 0, Number(renderSize) || 0) >= 80;
     }
-  
+
     function readableScaleFloor(rawSize, renderSize) {
       const size = Math.max(Number(rawSize) || 0, Number(renderSize) || 0);
       if (size >= 150) {
@@ -6644,7 +6644,7 @@
       }
       return 0.18;
     }
-  
+
     function cloneLabelResult(cellId, mass, result) {
       return {
         at: Date.now(),
@@ -6657,7 +6657,7 @@
         cached: Boolean(result.cached),
       };
     }
-  
+
     function captureDrawState(cellId, label, nativeColor, x, y) {
       const native = cloneRendererColor(nativeColor);
       state.lastDrawCapture = {
@@ -6673,12 +6673,12 @@
       };
       return state.lastDrawCapture;
     }
-  
+
     function sweepLabelCache(now) {
       if (now - lastCacheSweep < 5000 || labelCache.size < 64) {
         return;
       }
-  
+
       lastCacheSweep = now;
       for (const [cellId, entry] of labelCache) {
         if (now - entry.lastSeen > 30000) {
@@ -6686,16 +6686,16 @@
         }
       }
     }
-  
+
     function installGameScriptPatch() {
       const NodeCtor = win.Node || globalThis.Node;
       if (!NodeCtor?.prototype || NodeCtor.prototype.__blobioCellMassScriptPatchInstalled) {
         return;
       }
-  
+
       const originalAppendChild = NodeCtor.prototype.appendChild;
       const originalInsertBefore = NodeCtor.prototype.insertBefore;
-  
+
       NodeCtor.prototype.appendChild = function blobioCellMassAppendChild(node) {
         if (shouldWatchScript(node)) {
           node.dataset.blobioCellMassScriptPatch = 'seen';
@@ -6704,7 +6704,7 @@
         }
         return originalAppendChild.call(this, node);
       };
-  
+
       NodeCtor.prototype.insertBefore = function blobioCellMassInsertBefore(node, child) {
         if (shouldWatchScript(node)) {
           node.dataset.blobioCellMassScriptPatch = 'seen';
@@ -6713,10 +6713,10 @@
         }
         return originalInsertBefore.call(this, node, child);
       };
-  
+
       NodeCtor.prototype.__blobioCellMassScriptPatchInstalled = true;
       installGwtCallbackPatch();
-  
+
       const timer = win.setInterval?.(() => {
         if (installGwtCallbackPatch()) {
           win.clearInterval?.(timer);
@@ -6724,7 +6724,7 @@
       }, 10);
       win.setTimeout?.(() => win.clearInterval?.(timer), 30000);
     }
-  
+
     function shouldWatchScript(node) {
       return node
         && node.tagName === 'SCRIPT'
@@ -6733,13 +6733,13 @@
         && !node.dataset.blobioCellMassScriptPatch
         && CACHE_SCRIPT_RE.test(node.src);
     }
-  
+
     function installGwtCallbackPatch() {
       const html = win.html;
       if (!html || html.__blobioCellMassCallbackWrapped || typeof html.onScriptDownloaded !== 'function') {
         return false;
       }
-  
+
       const original = html.onScriptDownloaded;
       html.onScriptDownloaded = function blobioCellMassOnScriptDownloaded(chunks) {
         let patchedChunks = chunks;
@@ -6750,54 +6750,54 @@
         } catch (error) {
           rememberError(`GWT patch failed: ${getErrorMessage(error)}`);
         }
-  
+
         return original.call(this, patchedChunks);
       };
-  
+
       html.__blobioCellMassCallbackWrapped = true;
       state.wrappedCallback = true;
       return true;
     }
-  
+
     function patchDownloadedChunk(chunk) {
       if (typeof chunk !== 'string') {
         return chunk;
       }
-  
+
       const result = patchGameBundle(chunk);
       if (result.changed || !state.lastPatchResult) {
         state.lastPatchResult = compactPatchResult(result);
       }
-  
+
       if (!result.changed) {
         return chunk;
       }
-  
+
       state.patchedChunks += 1;
       return result.source;
     }
-  
+
     function patchGameBundle(source) {
       if (typeof source !== 'string') {
         return { source, changed: false, reason: 'not-a-string' };
       }
-  
+
       if (source.includes(`${PATCH_MARKER}(g.n,g.w*g.w/100`)) {
         return { source, changed: false, reason: 'already-patched' };
       }
-  
+
       const nameBlockStart = 'Mm(a.i,g.u?a.b:g.r?a.a:a.B);if(Nye(qxe.f,(Ize(),Gze))&&g.B!=null){';
       const nameDrawEnd = 'Gm(a.i,a.c,g.B,b,c)}}}}';
-  
+
       if (!source.includes(nameBlockStart) || !source.includes(nameDrawEnd)) {
         return { source, changed: false, reason: 'renderer-block-not-found' };
       }
-  
+
       let patched = source.replace(
         nameBlockStart,
         'Mm(a.i,g.u?a.b:g.r?a.a:a.B);d=false;if(Nye(qxe.f,(Ize(),Gze))&&g.B!=null){',
       );
-  
+
       const drawPatch = [
         'Gm(a.i,a.c,g.B,b,c);d=true}}',
         'if($wnd.BlobioCellMassDraw&&(!g.c||(g.c.M!=2&&g.c.M!=3&&g.c.M!=4&&g.c.M!=10))){',
@@ -6820,15 +6820,15 @@
         'Nn(a.i.b,1)',
         '}}}}',
       ].join('');
-  
+
       patched = patched.replace(nameDrawEnd, drawPatch);
       if (patched === source) {
         return { source, changed: false, reason: 'replace-failed' };
       }
-  
+
       return { source: patched, changed: true, reason: 'patched' };
     }
-  
+
     function compactPatchResult(result) {
       return {
         changed: Boolean(result.changed),
@@ -6836,12 +6836,12 @@
         sourceLength: typeof result.source === 'string' ? result.source.length : 0,
       };
     }
-  
+
     function rememberSample(cellId, mass, rawSize, renderSize, cellSize, name, nameDrawn, result) {
       if (state.counters.labelsDrawn % 30 !== 1) {
         return;
       }
-  
+
       state.samples.push({
         cellId,
         mass: Math.round(mass * 10) / 10,
@@ -6855,12 +6855,12 @@
         primary: result.primary,
         cached: result.cached,
       });
-  
+
       if (state.samples.length > 12) {
         state.samples.shift();
       }
     }
-  
+
     function debugReport() {
       const report = {
         installed: true,
@@ -6887,14 +6887,14 @@
         ],
         errors: state.errors.slice(-8),
       };
-  
+
       try {
         win.console?.log?.('[Blobio Cell Mass] debug', report);
         win.console?.log?.('[Blobio Cell Mass] JSON:', JSON.stringify(report));
       } catch {}
       return report;
     }
-  
+
     function normalizeSettings(value = {}) {
       const source = value && typeof value === 'object' ? value : {};
       const defaults = {
@@ -6908,7 +6908,7 @@
         nameGap: 1.2,
         updateDelayMs: 3000,
       };
-  
+
       return {
         enabled: source.enabled === undefined ? defaults.enabled : Boolean(source.enabled),
         compact: source.compact === undefined ? defaults.compact : Boolean(source.compact),
@@ -6921,7 +6921,7 @@
         updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 10000, defaults.updateDelayMs)),
       };
     }
-  
+
     function clampNumber(value, min, max, fallback) {
       if (value === null || value === undefined || value === '') {
         return fallback;
@@ -6929,7 +6929,7 @@
       const number = Number(value);
       return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
     }
-  
+
     function rememberError(message) {
       state.errors.push({
         at: Date.now(),
@@ -6939,7 +6939,7 @@
         state.errors.shift();
       }
     }
-  
+
     function cloneRendererColor(color) {
       if (!color || typeof color !== 'object') {
         return null;
@@ -6951,12 +6951,12 @@
         a: roundNumber(color.a),
       };
     }
-  
+
     function roundNumber(value) {
       const number = Number(value);
       return Number.isFinite(number) ? Math.round(number * 10000) / 10000 : 0;
     }
-  
+
     function getErrorMessage(error) {
       return error?.message || String(error);
     }
@@ -6973,7 +6973,7 @@
   const FPS_SAVER_FOOD_CASE_RE = /case 2:case 5:case 0:/;
   const FPS_SAVER_WORK_CULL_HOOK = 'if($wnd.__BlobPerfSaver&&$wnd.__BlobPerfSaver.skipParticleWork(g)){continue;}';
   const FPS_SAVER_DRAW_CULL_HOOK = 'if($wnd.__BlobPerfSaver&&$wnd.__BlobPerfSaver.skipParticleDraw(g)){break;}';
-  
+
   const FPS_SAVER_DEFAULT_SETTINGS = {
     liteMode: true,
     noTransitions: false,
@@ -6991,14 +6991,14 @@
     massLimit: 30,
     massCalcDelayMs: 0,
   };
-  
+
   function pageFpsSaverBootstrap(initialSettings = {}, pageWindow = globalThis) {
     const root = pageWindow || globalThis;
     const doc = root.document || globalThis.document;
     if (!doc?.documentElement) {
       return false;
     }
-  
+
     const host = String(root.location?.hostname || globalThis.location?.hostname || '').toLowerCase();
     const isGameClient = host === 'custom.client.blobgame.io';
     const isMainPage = (host === 'blobgame.io' || host.endsWith('.blobgame.io')) && !isGameClient;
@@ -7010,14 +7010,14 @@
     state.isMainPage = isMainPage;
     state.document = doc;
     root.__blobioFpsSaverState = state;
-  
+
     exposeHooks(root, state);
     installStyle(doc);
     installRequestAnimationFrameHook(root, doc, state);
     installGameScriptPatch(root, state);
     applySettings(root, doc, state);
     onReady(doc, root, () => applySettings(root, doc, state));
-  
+
     root.__blobioFpsSaverRefresh = (nextSettings = {}) => {
       state.settings = normalizeSettings(nextSettings);
       ensureCullBudgets(state);
@@ -7026,13 +7026,13 @@
       applySettings(root, doc, state);
       return { ...state.settings };
     };
-  
+
     root.BlobioFpsSaverDebug = () => buildDebug(root, doc, state);
     root.__BlobioFpsSaverDebug = root.BlobioFpsSaverDebug;
     root.__blobioFpsSaverInstalled = true;
     return true;
   }
-  
+
   function createState(settings, isGameClient, isMainPage) {
     const cleanSettings = normalizeSettings(settings);
     return {
@@ -7077,7 +7077,7 @@
       errors: [],
     };
   }
-  
+
   function normalizeSettings(source = {}) {
     const data = source && typeof source === 'object' ? source : {};
     return {
@@ -7098,14 +7098,14 @@
       massCalcDelayMs: clampInteger(data.massCalcDelayMs, 0, 1000, FPS_SAVER_DEFAULT_SETTINGS.massCalcDelayMs),
     };
   }
-  
+
   function boolSetting(value, fallback) {
     if (value === undefined || value === null || value === '') {
       return fallback;
     }
     return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true';
   }
-  
+
   function clampInteger(value, min, max, fallback) {
     if (value === null || value === undefined || value === '') {
       return fallback;
@@ -7113,7 +7113,7 @@
     const number = Math.round(Number(value));
     return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
   }
-  
+
   function exposeHooks(root, state) {
     root[FPS_SAVER_PAGE_HOOK] = {
       version: FPS_SAVER_VERSION,
@@ -7126,13 +7126,13 @@
     };
     root[FPS_SAVER_RUNTIME_HOOK] = root[FPS_SAVER_PAGE_HOOK];
   }
-  
+
   function installRequestAnimationFrameHook(root, doc, state) {
     if (state.rafHooked || root.__blobioFpsSaverRafHooked || typeof root.requestAnimationFrame !== 'function') {
       state.rafHooked = Boolean(root.__blobioFpsSaverRafHooked);
       return;
     }
-  
+
     const nativeRaf = root.requestAnimationFrame.bind(root);
     const nativeCancel = typeof root.cancelAnimationFrame === 'function'
       ? root.cancelAnimationFrame.bind(root)
@@ -7140,20 +7140,20 @@
     const handles = new Map();
     let nextId = -1;
     let lastHiddenTs = 0;
-  
+
     root.requestAnimationFrame = function blobioFpsSaverRequestAnimationFrame(callback) {
       if (typeof callback !== 'function') {
         return nativeRaf(callback);
       }
-  
+
       const id = nextId--;
       const handle = { active: true, nativeId: 0 };
-  
+
       const tick = (timestamp) => {
         if (!handle.active) {
           return;
         }
-  
+
         if (state.settings.hiddenTab && doc.hidden) {
           const hiddenDelay = 1000 / Math.max(1, state.settings.hiddenFps);
           if (lastHiddenTs && timestamp - lastHiddenTs < hiddenDelay) {
@@ -7163,18 +7163,18 @@
           lastHiddenTs = timestamp;
           state.counters.hiddenFrames += 1;
         }
-  
+
         handles.delete(id);
         state.counters.rafFrames += 1;
         beginRenderFrame(root, state, timestamp);
         callback.call(root, timestamp);
       };
-  
+
       handle.nativeId = nativeRaf(tick);
       handles.set(id, handle);
       return id;
     };
-  
+
     root.cancelAnimationFrame = function blobioFpsSaverCancelAnimationFrame(id) {
       const handle = handles.get(id);
       if (handle) {
@@ -7185,11 +7185,11 @@
       }
       nativeCancel?.(id);
     };
-  
+
     root.__blobioFpsSaverRafHooked = true;
     state.rafHooked = true;
   }
-  
+
   function beginRenderFrame(root, state, timestamp) {
     const frame = state.frameCull;
     const startedAt = Number(timestamp) || now(root);
@@ -7207,44 +7207,44 @@
     frame.massSeen = 0;
     frame.massSkipped = 0;
   }
-  
+
   function ensureCullFrame(root, state) {
     const current = now(root);
     if (!state.frameCull.startedAt || current - state.frameCull.startedAt > 250) {
       beginRenderFrame(root, state, current);
     }
   }
-  
+
   function skipParticleWork(root, state, object) {
     if (!state.settings.objectRenderer) {
       return false;
     }
-  
+
     const type = object?.c?.M;
     if (type !== 2 && type !== 5 && type !== 0) {
       return false;
     }
-  
+
     ensureCullFrame(root, state);
-  
+
     if (type === 2) {
       state.frameCull.foodSeen += 1;
       state.counters.foodSeen += 1;
-  
+
       if (!state.settings.foodCulling || state.frameCull.foodSeen <= getCullBudget(state, 'food')) {
         return false;
       }
-  
+
       state.frameCull.foodSkipped += 1;
       state.counters.foodSkipped += 1;
       return true;
     }
-  
+
     state.frameCull.massSeen += 1;
     state.counters.massSeen += 1;
     return false;
   }
-  
+
   function createCullBudget(limit) {
     return {
       committed: Math.max(0, Math.round(Number(limit)) || 0),
@@ -7254,7 +7254,7 @@
       emptyFrames: 0,
     };
   }
-  
+
   function ensureCullBudgets(state) {
     if (!state.cullBudget || typeof state.cullBudget !== 'object') {
       state.cullBudget = {};
@@ -7266,12 +7266,12 @@
       state.cullBudget.mass = createCullBudget(state.settings.massLimit);
     }
   }
-  
+
   function clampCullBudgets(state) {
     clampCullBudget(state.cullBudget.food, state.settings.foodLimit);
     clampCullBudget(state.cullBudget.mass, state.settings.massLimit);
   }
-  
+
   function clampCullBudget(budget, limit) {
     const max = Math.max(0, Math.round(Number(limit)) || 0);
     budget.committed = Math.max(0, Math.min(max, Math.round(Number(budget.committed)) || 0));
@@ -7279,7 +7279,7 @@
       budget.pending = Math.max(0, Math.min(max, Math.round(Number(budget.pending)) || 0));
     }
   }
-  
+
   function updateCullBudget(budget, observedCount, limit, delayMs, timestamp) {
     const max = Math.max(0, Math.round(Number(limit)) || 0);
     const observed = Math.max(0, Math.round(Number(observedCount)) || 0);
@@ -7287,62 +7287,62 @@
     const current = Math.max(0, Math.min(max, Math.round(Number(budget.committed)) || 0));
     const delay = Math.max(0, Math.round(Number(delayMs)) || 0);
     const time = Math.max(0, Number(timestamp) || 0);
-  
+
     budget.lastObserved = observed;
     budget.committed = current;
-  
+
     if (observed === 0) {
       budget.emptyFrames = (Number(budget.emptyFrames) || 0) + 1;
       return;
     }
-  
+
     if (delay <= 0 || nextBudget < current) {
       budget.committed = nextBudget;
       budget.pending = null;
       budget.pendingAt = 0;
       return;
     }
-  
+
     if (nextBudget === current) {
       budget.pending = null;
       budget.pendingAt = 0;
       return;
     }
-  
+
     if (budget.pending !== nextBudget) {
       budget.pending = nextBudget;
       budget.pendingAt = time;
       return;
     }
-  
+
     if (time - budget.pendingAt >= delay) {
       budget.committed = nextBudget;
       budget.pending = null;
       budget.pendingAt = 0;
     }
   }
-  
+
   function getCullBudget(state, kind) {
     ensureCullBudgets(state);
     const fallback = kind === 'food' ? state.settings.foodLimit : state.settings.massLimit;
     const budget = state.cullBudget[kind];
     return Math.max(0, Math.min(fallback, Math.round(Number(budget?.committed)) || 0));
   }
-  
+
   function installGameScriptPatch(root, state) {
     if (!state.isGameClient) {
       return;
     }
-  
+
     const NodeCtor = root.Node || globalThis.Node;
     if (!NodeCtor?.prototype || NodeCtor.prototype.__blobioFpsSaverScriptPatchInstalled) {
       installGwtCallbackPatch(root, state);
       return;
     }
-  
+
     const originalAppendChild = NodeCtor.prototype.appendChild;
     const originalInsertBefore = NodeCtor.prototype.insertBefore;
-  
+
     NodeCtor.prototype.appendChild = function blobioFpsSaverAppendChild(node) {
       if (shouldWatchScript(node)) {
         node.dataset.blobioFpsSaverScriptPatch = 'seen';
@@ -7351,7 +7351,7 @@
       }
       return originalAppendChild.call(this, node);
     };
-  
+
     NodeCtor.prototype.insertBefore = function blobioFpsSaverInsertBefore(node, child) {
       if (shouldWatchScript(node)) {
         node.dataset.blobioFpsSaverScriptPatch = 'seen';
@@ -7360,10 +7360,10 @@
       }
       return originalInsertBefore.call(this, node, child);
     };
-  
+
     NodeCtor.prototype.__blobioFpsSaverScriptPatchInstalled = true;
     state.scriptPatchInstalled = true;
-  
+
     installGwtCallbackPatch(root, state);
     const timer = root.setInterval?.(() => {
       if (installGwtCallbackPatch(root, state)) {
@@ -7372,7 +7372,7 @@
     }, 10);
     root.setTimeout?.(() => root.clearInterval?.(timer), 30000);
   }
-  
+
   function shouldWatchScript(node) {
     return node
       && node.tagName === 'SCRIPT'
@@ -7381,19 +7381,19 @@
       && !node.dataset.blobioFpsSaverScriptPatch
       && FPS_SAVER_CACHE_SCRIPT_RE.test(node.src);
   }
-  
+
   function installGwtCallbackPatch(root, state) {
     const html = root.html;
     if (!html || html.__blobioFpsSaverCallbackWrapped || typeof html.onScriptDownloaded !== 'function') {
       state.callbackWrapped = Boolean(html?.__blobioFpsSaverCallbackWrapped);
       return state.callbackWrapped;
     }
-  
+
     const original = html.onScriptDownloaded;
     html.onScriptDownloaded = function blobioFpsSaverOnScriptDownloaded(chunks) {
       state.counters.callbackCalls += 1;
       let patchedChunks = chunks;
-  
+
       try {
         patchedChunks = Array.isArray(chunks)
           ? chunks.map((chunk) => patchDownloadedChunk(chunk, state))
@@ -7401,53 +7401,53 @@
       } catch (error) {
         rememberError(state, error);
       }
-  
+
       return original.call(this, patchedChunks);
     };
-  
+
     html.__blobioFpsSaverCallbackWrapped = true;
     state.callbackWrapped = true;
     return true;
   }
-  
+
   function patchDownloadedChunk(chunk, state) {
     if (typeof chunk !== 'string') {
       return chunk;
     }
-  
+
     const result = patchGameCode(chunk);
     state.patch.lastPatchResult = result.result;
     if (!result.changed) {
       return chunk;
     }
-  
+
     state.counters.patchedChunks += 1;
     return result.code;
   }
-  
+
   function patchGameCode(code) {
     if (typeof code !== 'string') {
       return { code, changed: false, result: null };
     }
-  
+
     const loopSeen = FPS_SAVER_PARTICLE_LOOP_RE.test(code);
     const caseSeen = FPS_SAVER_FOOD_CASE_RE.test(code);
     const workAlreadyPatched = code.includes('$wnd.__BlobPerfSaver.skipParticleWork(g)');
     const drawAlreadyPatched = code.includes('$wnd.__BlobPerfSaver.skipParticleDraw(g)')
       || code.includes('$wnd.__BlobPerfSaver.skipParticle(g)');
     let patched = code;
-  
+
     if (loopSeen && !workAlreadyPatched) {
       patched = patched.replace(FPS_SAVER_PARTICLE_LOOP_RE, (match) => match.replace(
         /([A-Za-z_$][\w$]*\(g\);)$/,
         `${FPS_SAVER_WORK_CULL_HOOK}$1`,
       ));
     }
-  
+
     if (!patched.includes('$wnd.__BlobPerfSaver.skipParticleWork(g)') && caseSeen && !drawAlreadyPatched) {
       patched = patched.replace(FPS_SAVER_FOOD_CASE_RE, (match) => `${match}${FPS_SAVER_DRAW_CULL_HOOK}`);
     }
-  
+
     const result = {
       changed: patched !== code,
       particleLoopSeen: loopSeen,
@@ -7456,19 +7456,19 @@
       drawCullHookInstalled: patched.includes('$wnd.__BlobPerfSaver.skipParticleDraw(g)')
         || patched.includes('$wnd.__BlobPerfSaver.skipParticle(g)'),
     };
-  
+
     return {
       code: patched,
       changed: result.changed,
       result,
     };
   }
-  
+
   function installStyle(doc) {
     if (doc.getElementById?.(FPS_SAVER_STYLE_ID)) {
       return;
     }
-  
+
     const style = doc.createElement('style');
     style.id = FPS_SAVER_STYLE_ID;
     style.textContent = `
@@ -7479,19 +7479,19 @@
     transition: none !important;
     scroll-behavior: auto !important;
   }
-  
+
   html.blobio-fps-saver-main-lite body > div,
   html.blobio-fps-saver-main-lite body > main,
   html.blobio-fps-saver-main-lite body > section,
   html.blobio-fps-saver-main-lite iframe {
     contain: layout paint style;
   }
-  
+
   html.blobio-fps-saver-main-lite iframe {
     content-visibility: auto;
     contain-intrinsic-size: 360px 240px;
   }
-  
+
   html.blobio-fps-saver-overlay-contain #chat-wrapper,
   html.blobio-fps-saver-overlay-contain #chat,
   html.blobio-fps-saver-overlay-contain #leader-board,
@@ -7505,7 +7505,7 @@
   html.blobio-fps-saver-overlay-contain .swal2-container {
     contain: layout paint style;
   }
-  
+
   html.blobio-fps-saver-toast-lite #toast,
   html.blobio-fps-saver-toast-lite .toast,
   html.blobio-fps-saver-toast-lite .toast *,
@@ -7519,29 +7519,29 @@
   `;
     (doc.head || doc.documentElement).appendChild(style);
   }
-  
+
   function applySettings(root, doc, state) {
     const html = doc.documentElement;
     if (!html) {
       return;
     }
-  
+
     toggleClass(html, 'blobio-fps-saver-no-transitions', state.settings.noTransitions);
     toggleClass(html, 'blobio-fps-saver-main-lite', state.settings.liteMode && state.isMainPage);
     toggleClass(html, 'blobio-fps-saver-overlay-contain', state.settings.gameOverlay && state.isGameClient);
     toggleClass(html, 'blobio-fps-saver-toast-lite', state.settings.toastModalAnim);
-  
+
     installChatGuard(root, doc, state);
     optimizeMainPageIframes(root, doc, state);
     exposeHooks(root, state);
   }
-  
+
   function optimizeMainPageIframes(root, doc, state) {
     if (!state.isMainPage || !state.settings.liteMode || !doc.querySelectorAll) {
       disconnectIframeObserver(state);
       return;
     }
-  
+
     const applyIframeHints = () => {
       for (const frame of doc.querySelectorAll('iframe') || []) {
         frame.loading = 'lazy';
@@ -7550,9 +7550,9 @@
         frame.style.containIntrinsicSize = '360px 240px';
       }
     };
-  
+
     applyIframeHints();
-  
+
     if (!state.iframeObserver && typeof root.MutationObserver === 'function' && doc.body) {
       state.iframeObserver = new root.MutationObserver(() => {
         scheduleFrame(root, applyIframeHints);
@@ -7560,18 +7560,18 @@
       state.iframeObserver.observe(doc.body, { childList: true, subtree: true });
     }
   }
-  
+
   function disconnectIframeObserver(state) {
     state.iframeObserver?.disconnect?.();
     state.iframeObserver = null;
   }
-  
+
   function installChatGuard(root, doc, state) {
     if (!state.isGameClient || !state.settings.chatGuard || typeof root.MutationObserver !== 'function') {
       disconnectChatGuard(root, state);
       return;
     }
-  
+
     const chat = doc.getElementById?.('chat');
     if (!chat) {
       if (!state.chatRetryTimer && doc.body) {
@@ -7591,12 +7591,12 @@
       }
       return;
     }
-  
+
     if (state.chatObserver) {
       trimChat(chat, state);
       return;
     }
-  
+
     let cleanupScheduled = false;
     state.chatObserver = new root.MutationObserver(() => {
       if (cleanupScheduled) {
@@ -7611,7 +7611,7 @@
     state.chatObserver.observe(chat, { childList: true });
     trimChat(chat, state);
   }
-  
+
   function trimChat(chat, state) {
     const max = state.settings.maxChatRows;
     let removed = 0;
@@ -7621,7 +7621,7 @@
     }
     state.counters.chatTrimmed += removed;
   }
-  
+
   function disconnectChatGuard(root, state) {
     state.chatObserver?.disconnect?.();
     state.chatObserver = null;
@@ -7630,7 +7630,7 @@
       state.chatRetryTimer = null;
     }
   }
-  
+
   function onReady(doc, root, callback) {
     if (doc.readyState === 'loading') {
       doc.addEventListener?.('DOMContentLoaded', callback, { once: true });
@@ -7638,7 +7638,7 @@
     }
     root.setTimeout?.(callback, 0);
   }
-  
+
   function scheduleFrame(root, callback) {
     if (typeof root.requestAnimationFrame === 'function') {
       root.requestAnimationFrame(callback);
@@ -7646,7 +7646,7 @@
     }
     root.setTimeout?.(callback, 16);
   }
-  
+
   function toggleClass(node, className, enabled) {
     if (enabled) {
       node.classList?.add?.(className);
@@ -7654,17 +7654,17 @@
       node.classList?.remove?.(className);
     }
   }
-  
+
   function now(root) {
     return Number(root.performance?.now?.()) || Date.now();
   }
-  
+
   function rememberError(state, error) {
     const message = error?.message || String(error);
     state.errors.push({ message, at: Date.now() });
     state.errors = state.errors.slice(-8);
   }
-  
+
   function buildDebug(root, doc, state) {
     return {
       installed: Boolean(root.__blobioFpsSaverInstalled),
@@ -7695,7 +7695,7 @@
       errors: state.errors.slice(),
     };
   }
-  
+
   pageFpsSaverBootstrap.__test = {
     normalizeSettings,
     patchGameCode,
