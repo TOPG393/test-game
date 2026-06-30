@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.13';
+  const SCRIPT_VERSION = '0.1.14';
   const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
   const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
   const CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
@@ -54,6 +54,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     lastLabel: null,
     lastDrawCapture: null,
     arrowOverlay: null,
+    lastRadar: null,
     errors: [],
   };
 
@@ -410,10 +411,12 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     const scaleX = rect.width / canvasWidth;
     const scaleY = rect.height / canvasHeight;
     const now = Date.now();
-    const players = getVisiblePlayers()
-      .filter((player) => player.screenAt && now - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS)
-      .slice(0, 12);
-    const ownCells = players.filter((player) => player.own);
+    const freshPlayers = getVisiblePlayers()
+      .filter((player) => player.screenAt && now - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS);
+    const ownCells = freshPlayers.filter((player) => player.own);
+    const players = freshPlayers
+      .filter((player) => !player.own)
+      .slice(0, 20);
     const ownCenter = getOwnScreenCenter(ownCells, scaleX, scaleY, rect);
     const centerX = ownCenter.x;
     const centerY = ownCenter.y;
@@ -422,13 +425,21 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
 
     drawPlayerRadar(context, centerX, centerY, radarRadius);
     for (const player of players) {
-      if (player.own) {
-        continue;
-      }
       const targetX = clampNumber(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
       const targetY = clampNumber(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
       drawPlayerRadarDot(context, centerX, centerY, radarRadius, targetX, targetY, radarScale, player);
     }
+    drawPlayerRadarCenter(context, centerX, centerY);
+
+    state.lastRadar = {
+      at: now,
+      centerX: roundNumber(centerX),
+      centerY: roundNumber(centerY),
+      radius: roundNumber(radarRadius),
+      scale: roundNumber(radarScale),
+      ownCells: ownCells.length,
+      players: players.length,
+    };
 
     if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
       state.arrowOverlay = null;
@@ -474,8 +485,8 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       }
     }
 
-    const visibleHalfRange = Math.max(rect.width, rect.height) * 0.5;
-    return Math.max(160, farthest, visibleHalfRange);
+    const visibleRange = Math.min(rect.width, rect.height) * 0.52;
+    return Math.max(120, Math.min(Math.max(farthest, visibleRange), visibleRange * 1.35));
   }
 
   function drawPlayerRadar(context, centerX, centerY, radius) {
@@ -489,12 +500,19 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     context.arc(centerX, centerY, radius, 0, Math.PI * 2);
     context.fill();
     context.stroke();
+    context.restore();
+  }
+
+  function drawPlayerRadarCenter(context, centerX, centerY) {
+    context.save();
+    context.shadowColor = 'rgba(0, 0, 0, 0.55)';
+    context.shadowBlur = 8;
     context.beginPath();
-    context.arc(centerX, centerY, 5, 0, Math.PI * 2);
-    context.fillStyle = 'rgba(255, 68, 68, 0.96)';
+    context.arc(centerX, centerY, 8, 0, Math.PI * 2);
+    context.fillStyle = 'rgba(255, 48, 48, 0.98)';
     context.fill();
-    context.lineWidth = 2;
-    context.strokeStyle = 'rgba(255, 255, 255, 0.86)';
+    context.lineWidth = 3;
+    context.strokeStyle = 'rgba(255, 255, 255, 0.92)';
     context.stroke();
     context.restore();
   }
@@ -507,8 +525,8 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       return;
     }
 
-    const ratio = clampNumber(distance / radarScale, 0.08, 1, 0.08);
-    const dotDistance = Math.min(radius - 10, ratio * (radius - 10));
+    const ratio = clampNumber(distance / radarScale, 0.16, 1, 0.16);
+    const dotDistance = Math.min(radius - 12, ratio * (radius - 12));
     const dotX = centerX + (dx / distance) * dotDistance;
     const dotY = centerY + (dy / distance) * dotDistance;
     const size = clampNumber(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 5, 5, 12, 7);
@@ -883,6 +901,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       visiblePlayers: getVisiblePlayers(),
       lastLabel: state.lastLabel,
       lastDrawCapture: state.lastDrawCapture,
+      lastRadar: state.lastRadar,
       commands: [
         'BlobioCellMassDebug()',
         'BlobioShowMassDebug()',
