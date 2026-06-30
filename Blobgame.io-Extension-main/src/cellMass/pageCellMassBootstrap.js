@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.9';
+  const SCRIPT_VERSION = '0.1.10';
   const CACHE_SCRIPT_RE = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
   const DRAW_HOOK_NAME = 'BlobioCellMassDraw';
   const PATCH_MARKER = 'BlobioCellMassDraw';
@@ -102,7 +102,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return settings;
   }
 
-  function drawCellMassLabel(cellId, mass, rawSize, renderSize, cellSize, name, nameDrawn, nameScale, explicitFitScale, totalMass, worldX, worldY, cellType) {
+  function drawCellMassLabel(cellId, mass, rawSize, renderSize, cellSize, name, nameDrawn, nameScale, explicitFitScale, totalMass, worldX, worldY, cellType, isOwnCell, isFriendCell) {
     state.counters.drawHookCalls += 1;
 
     if (!settings.enabled) {
@@ -124,7 +124,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       return null;
     }
 
-    rememberVisiblePlayer(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, worldX, worldY, cellType);
+    rememberVisiblePlayer(cellId, safeMass, safeRawSize, safeRenderSize, cellSize, safeName, worldX, worldY, cellType, isOwnCell, isFriendCell);
 
     const autoMinMass = settings.smartRendering ? getAutoMinMass(totalMass) : 0;
     if (autoMinMass > 0 && safeMass <= autoMinMass) {
@@ -167,7 +167,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return result;
   }
 
-  function rememberVisiblePlayer(cellId, mass, rawSize, renderSize, cellSize, name, worldX, worldY, cellType) {
+  function rememberVisiblePlayer(cellId, mass, rawSize, renderSize, cellSize, name, worldX, worldY, cellType, isOwnCell, isFriendCell) {
     const key = String(cellId ?? `${name}:${Math.round(Number(worldX) || 0)}:${Math.round(Number(worldY) || 0)}`);
     const now = Date.now();
     const previous = visiblePlayers.get(key);
@@ -188,6 +188,8 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       screenX,
       screenY,
       type: Number.isFinite(Number(cellType)) ? Number(cellType) : null,
+      own: Boolean(isOwnCell),
+      friend: Boolean(isFriendCell),
     });
     state.counters.visiblePlayerCells += 1;
     pruneVisiblePlayers(now);
@@ -401,17 +403,24 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     const canvasHeight = Number(targetCanvas.height) || rect.height;
     const scaleX = rect.width / canvasWidth;
     const scaleY = rect.height / canvasHeight;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
     const now = Date.now();
     const players = getVisiblePlayers()
       .filter((player) => player.screenAt && now - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS)
       .slice(0, 12);
+    const ownCells = players.filter((player) => player.own);
+    const ownCenter = getOwnScreenCenter(ownCells, scaleX, scaleY, rect);
+    const centerX = ownCenter.x;
+    const centerY = ownCenter.y;
+    const radarRadius = clampNumber(Math.min(rect.width, rect.height) * 0.16, 64, 130, 92);
 
+    drawPlayerRadar(context, centerX, centerY, radarRadius);
     for (const player of players) {
+      if (player.own) {
+        continue;
+      }
       const targetX = clampNumber(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
       const targetY = clampNumber(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-      drawPlayerArrow(context, centerX, centerY, targetX, targetY, player);
+      drawPlayerRadarDot(context, centerX, centerY, radarRadius, targetX, targetY, player);
     }
 
     if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
@@ -419,33 +428,69 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     }
   }
 
-  function drawPlayerArrow(context, centerX, centerY, targetX, targetY, player) {
+  function getOwnScreenCenter(ownCells, scaleX, scaleY, rect) {
+    if (!ownCells.length) {
+      return {
+        x: rect.width / 2,
+        y: rect.height / 2,
+      };
+    }
+
+    let totalMass = 0;
+    let weightedX = 0;
+    let weightedY = 0;
+    for (const player of ownCells) {
+      const weight = Math.max(1, Number(player.mass) || 1);
+      totalMass += weight;
+      weightedX += Number(player.screenX) * scaleX * weight;
+      weightedY += Number(player.screenY) * scaleY * weight;
+    }
+
+    return {
+      x: clampNumber(weightedX / totalMass, 24, rect.width - 24, rect.width / 2),
+      y: clampNumber(weightedY / totalMass, 24, rect.height - 24, rect.height / 2),
+    };
+  }
+
+  function drawPlayerRadar(context, centerX, centerY, radius) {
+    context.save();
+    context.lineWidth = 2;
+    context.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    context.fillStyle = 'rgba(0, 0, 0, 0.16)';
+    context.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    context.shadowBlur = 8;
+    context.beginPath();
+    context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.arc(centerX, centerY, 4, 0, Math.PI * 2);
+    context.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    context.fill();
+    context.restore();
+  }
+
+  function drawPlayerRadarDot(context, centerX, centerY, radius, targetX, targetY, player) {
     const angle = Math.atan2(targetY - centerY, targetX - centerX);
     const distance = Math.hypot(targetX - centerX, targetY - centerY);
-    if (!Number.isFinite(distance) || distance < 48) {
+    if (!Number.isFinite(distance) || distance < 32) {
       return;
     }
 
-    const arrowX = centerX + Math.cos(angle) * Math.min(distance - 24, 180);
-    const arrowY = centerY + Math.sin(angle) * Math.min(distance - 24, 180);
-    const size = clampNumber(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 2.8, 9, 18, 12);
+    const dotDistance = Math.min(radius - 10, Math.max(18, distance * 0.28));
+    const dotX = centerX + Math.cos(angle) * dotDistance;
+    const dotY = centerY + Math.sin(angle) * dotDistance;
+    const size = clampNumber(Math.sqrt(Math.max(1, Number(player.mass) || 1)) / 5, 5, 12, 7);
     const label = `${String(player.name || '').slice(0, 14)} ${formatMass(player.mass)}`.trim();
 
     context.save();
-    context.translate(arrowX, arrowY);
-    context.rotate(angle);
     context.shadowColor = 'rgba(0, 0, 0, 0.55)';
-    context.shadowBlur = 5;
-    context.lineJoin = 'round';
-    context.strokeStyle = 'rgba(0, 0, 0, 0.72)';
-    context.fillStyle = 'rgba(255, 220, 86, 0.95)';
-    context.lineWidth = 3;
+    context.shadowBlur = 6;
+    context.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    context.fillStyle = player.friend ? 'rgba(80, 220, 130, 0.95)' : 'rgba(255, 220, 86, 0.95)';
+    context.lineWidth = 2;
     context.beginPath();
-    context.moveTo(size, 0);
-    context.lineTo(-size * 0.72, -size * 0.58);
-    context.lineTo(-size * 0.42, 0);
-    context.lineTo(-size * 0.72, size * 0.58);
-    context.closePath();
+    context.arc(dotX, dotY, size, 0, Math.PI * 2);
     context.stroke();
     context.fill();
     context.restore();
@@ -457,8 +502,8 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     context.lineWidth = 4;
     context.strokeStyle = 'rgba(0, 0, 0, 0.68)';
     context.fillStyle = 'rgba(255, 255, 255, 0.94)';
-    context.strokeText(label, arrowX, arrowY - size - 12);
-    context.fillText(label, arrowX, arrowY - size - 12);
+    context.strokeText(label, dotX, dotY - size - 11);
+    context.fillText(label, dotX, dotY - size - 11);
     context.restore();
   }
 
@@ -670,7 +715,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     const drawPatch = [
       'Gm(a.i,a.c,g.B,b,c);d=true}}',
       'if($wnd.BlobioCellMassDraw&&(!g.c||(g.c.M!=2&&g.c.M!=3&&g.c.M!=4&&g.c.M!=10))){',
-      'h=$wnd.BlobioCellMassDraw(g.n,g.w*g.w/100,g.w,g.M,g.N,g.B,d,d?f:0,0,qxe.g/100,g.R,g.S,g.c?g.c.M:-1);',
+      'h=$wnd.BlobioCellMassDraw(g.n,g.w*g.w/100,g.w,g.M,g.N,g.B,d,d?f:0,0,qxe.g/100,g.R,g.S,g.c?g.c.M:-1,g.u,g.r);',
       'if(h&&h.text){',
       'f=d?a.o.b:0;',
       'Mm(a.i,a.B);',
