@@ -192,7 +192,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.16";
+    const SCRIPT_VERSION = "0.1.17";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -542,8 +542,8 @@
       const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= VISIBLE_PLAYER_MAX_AGE_MS);
       const ownCells = freshPlayers.filter((player) => player.own);
       const players = freshPlayers.filter((player) => !player.own).slice(0, 20);
-      const ownCenter = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
-      if (!ownCenter) {
+      const anchor = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
+      if (!anchor) {
         state.lastRadar = {
           at: now2,
           reason: "no-anchor-cell-visible",
@@ -552,27 +552,29 @@
         };
         return;
       }
-      const centerX = ownCenter.x;
-      const centerY = ownCenter.y;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
       const radarRadius = clampNumber2(Math.min(rect.width, rect.height) * 0.16, 64, 130, 92);
-      const radarScale = getRadarScale(players, ownCenter, scaleX, scaleY, rect);
+      const radarScale = getRadarScale(players, anchor, scaleX, scaleY, rect);
       drawPlayerRadar(context, centerX, centerY, radarRadius);
       for (const player of players) {
         const targetX = clampNumber2(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
         const targetY = clampNumber2(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-        drawPlayerRadarDot(context, centerX, centerY, radarRadius, targetX, targetY, radarScale, player);
+        drawPlayerRadarDot(context, centerX, centerY, radarRadius, anchor.x, anchor.y, targetX, targetY, radarScale, player);
       }
       drawPlayerRadarCenter(context, centerX, centerY);
       state.lastRadar = {
         at: now2,
         centerX: roundNumber(centerX),
         centerY: roundNumber(centerY),
+        anchorX: roundNumber(anchor.x),
+        anchorY: roundNumber(anchor.y),
         radius: roundNumber(radarRadius),
         scale: roundNumber(radarScale),
         ownCells: ownCells.length,
-        anchor: ownCenter.anchor,
-        anchorName: ownCenter.name,
-        anchorMass: ownCenter.mass,
+        anchor: anchor.anchor,
+        anchorName: anchor.name,
+        anchorMass: anchor.mass,
         players: players.length
       };
       if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
@@ -609,7 +611,7 @@
       const biggest = freshPlayers.slice().sort((left, right) => (Number(right.mass) || 0) - (Number(left.mass) || 0))[0];
       return biggest ? [biggest] : [];
     }
-    function getRadarScale(players, ownCenter, scaleX, scaleY, rect) {
+    function getRadarScale(players, anchor, scaleX, scaleY, rect) {
       let farthest = 0;
       for (const player of players) {
         if (player.own) {
@@ -617,7 +619,7 @@
         }
         const targetX = Number(player.screenX) * scaleX;
         const targetY = Number(player.screenY) * scaleY;
-        const distance = Math.hypot(targetX - ownCenter.x, targetY - ownCenter.y);
+        const distance = Math.hypot(targetX - anchor.x, targetY - anchor.y);
         if (Number.isFinite(distance)) {
           farthest = Math.max(farthest, distance);
         }
@@ -651,9 +653,9 @@
       context.stroke();
       context.restore();
     }
-    function drawPlayerRadarDot(context, centerX, centerY, radius, targetX, targetY, radarScale, player) {
-      const dx = targetX - centerX;
-      const dy = targetY - centerY;
+    function drawPlayerRadarDot(context, centerX, centerY, radius, anchorX, anchorY, targetX, targetY, radarScale, player) {
+      const dx = targetX - anchorX;
+      const dy = targetY - anchorY;
       const distance = Math.hypot(dx, dy);
       if (!Number.isFinite(distance) || distance < 32) {
         return;
@@ -15831,7 +15833,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.92";
+  var DEFAULT_EXTENSION_VERSION = "0.1.93";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21466,7 +21468,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.92";
+  var EXTENSION_VERSION = "0.1.93";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,

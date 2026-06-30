@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.16';
+  const SCRIPT_VERSION = '0.1.17';
   const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
   const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
   const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -418,8 +418,8 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     const players = freshPlayers
       .filter((player) => !player.own)
       .slice(0, 20);
-    const ownCenter = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
-    if (!ownCenter) {
+    const anchor = getOwnScreenCenter(ownCells, freshPlayers, scaleX, scaleY, rect);
+    if (!anchor) {
       state.lastRadar = {
         at: now,
         reason: 'no-anchor-cell-visible',
@@ -429,16 +429,16 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       return;
     }
 
-    const centerX = ownCenter.x;
-    const centerY = ownCenter.y;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
     const radarRadius = clampNumber(Math.min(rect.width, rect.height) * 0.16, 64, 130, 92);
-    const radarScale = getRadarScale(players, ownCenter, scaleX, scaleY, rect);
+    const radarScale = getRadarScale(players, anchor, scaleX, scaleY, rect);
 
     drawPlayerRadar(context, centerX, centerY, radarRadius);
     for (const player of players) {
       const targetX = clampNumber(Number(player.screenX) * scaleX, 16, rect.width - 16, centerX);
       const targetY = clampNumber(Number(player.screenY) * scaleY, 16, rect.height - 16, centerY);
-      drawPlayerRadarDot(context, centerX, centerY, radarRadius, targetX, targetY, radarScale, player);
+      drawPlayerRadarDot(context, centerX, centerY, radarRadius, anchor.x, anchor.y, targetX, targetY, radarScale, player);
     }
     drawPlayerRadarCenter(context, centerX, centerY);
 
@@ -446,12 +446,14 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       at: now,
       centerX: roundNumber(centerX),
       centerY: roundNumber(centerY),
+      anchorX: roundNumber(anchor.x),
+      anchorY: roundNumber(anchor.y),
       radius: roundNumber(radarRadius),
       scale: roundNumber(radarScale),
       ownCells: ownCells.length,
-      anchor: ownCenter.anchor,
-      anchorName: ownCenter.name,
-      anchorMass: ownCenter.mass,
+      anchor: anchor.anchor,
+      anchorName: anchor.name,
+      anchorMass: anchor.mass,
       players: players.length,
     };
 
@@ -496,7 +498,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return biggest ? [biggest] : [];
   }
 
-  function getRadarScale(players, ownCenter, scaleX, scaleY, rect) {
+  function getRadarScale(players, anchor, scaleX, scaleY, rect) {
     let farthest = 0;
     for (const player of players) {
       if (player.own) {
@@ -505,7 +507,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
 
       const targetX = Number(player.screenX) * scaleX;
       const targetY = Number(player.screenY) * scaleY;
-      const distance = Math.hypot(targetX - ownCenter.x, targetY - ownCenter.y);
+      const distance = Math.hypot(targetX - anchor.x, targetY - anchor.y);
       if (Number.isFinite(distance)) {
         farthest = Math.max(farthest, distance);
       }
@@ -543,9 +545,9 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     context.restore();
   }
 
-  function drawPlayerRadarDot(context, centerX, centerY, radius, targetX, targetY, radarScale, player) {
-    const dx = targetX - centerX;
-    const dy = targetY - centerY;
+  function drawPlayerRadarDot(context, centerX, centerY, radius, anchorX, anchorY, targetX, targetY, radarScale, player) {
+    const dx = targetX - anchorX;
+    const dy = targetY - anchorY;
     const distance = Math.hypot(dx, dy);
     if (!Number.isFinite(distance) || distance < 32) {
       return;
