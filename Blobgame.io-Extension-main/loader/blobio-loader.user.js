@@ -6739,7 +6739,7 @@
   
       const drawPatch = [
         'Gm(a.i,a.c,g.B,b,c);d=true}}',
-        'if($wnd.BlobioCellMassDraw){',
+        'if($wnd.BlobioCellMassDraw&&(!g.c||(g.c.M!=2&&g.c.M!=3&&g.c.M!=4&&g.c.M!=10))){',
         'h=$wnd.BlobioCellMassDraw(g.n,g.w*g.w/100,g.w,g.M,g.N,g.B,d,d?f:0,0,qxe.g/100);',
         'if(h&&h.text){',
         'f=d?a.o.b:0;',
