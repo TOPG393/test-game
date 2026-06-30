@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.100
+// @version      0.1.101
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.98';
+  const VERSION = '0.1.99';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -623,6 +623,7 @@
     nameGap: 1.2,
     updateDelayMs: 3000,
     playerArrows: false,
+    radarAnchorName: '',
   };
 
   function normalizeCellMassRuntimeSnapshot(value) {
@@ -642,6 +643,7 @@
       nameGap: normalizeHudInfoRuntimeNumber(value.nameGap, 0.1, 3, DEFAULT_CELL_MASS_RUNTIME_SETTINGS.nameGap),
       updateDelayMs: Math.round(normalizeHudInfoRuntimeNumber(value.updateDelayMs, 0, 10000, DEFAULT_CELL_MASS_RUNTIME_SETTINGS.updateDelayMs)),
       playerArrows: value.playerArrows === undefined ? DEFAULT_CELL_MASS_RUNTIME_SETTINGS.playerArrows : readBooleanValue(value.playerArrows, DEFAULT_CELL_MASS_RUNTIME_SETTINGS.playerArrows),
+      radarAnchorName: value.radarAnchorName === undefined ? DEFAULT_CELL_MASS_RUNTIME_SETTINGS.radarAnchorName : String(value.radarAnchorName || '').replace(/\s+/g, ' ').trim().toLowerCase(),
       updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
     };
   }
@@ -6374,7 +6376,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.22';
+    const SCRIPT_VERSION = '0.1.23';
     const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
     const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
     const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -6389,6 +6391,7 @@
     const RADAR_PLAYER_MAX_AGE_MS = 120;
     const PLAYER_ARROW_CANVAS_ID = 'blobio-visible-player-arrows';
     const PLAYER_ARROW_TOGGLE_ID = 'blobio-visible-player-toggle';
+    const PLAYER_ANCHOR_TOGGLE_ID = 'blobio-visible-player-anchor';
 
     let settings = normalizeSettings(initialSettings);
     let lastCacheSweep = 0;
@@ -6436,6 +6439,8 @@
     win.__BlobioVisiblePlayers = getVisiblePlayers;
     win.BlobioPlayerArrows = setPlayerArrowsEnabled;
     win.__BlobioPlayerArrows = setPlayerArrowsEnabled;
+    win.BlobioRadarAnchorName = setPlayerRadarAnchorName;
+    win.__BlobioRadarAnchorName = setPlayerRadarAnchorName;
     win.__blobioCellMassCaptureDraw = captureDrawState;
 
     if (win.__BLOBIO_CELL_MASS_TEST__) {
@@ -6591,10 +6596,25 @@
       state.settings = settings;
       persistSettings();
       updatePlayerArrowToggle();
+      updatePlayerAnchorToggle();
       if (settings.playerArrows) {
         installPlayerArrowOverlay();
       }
       return settings.playerArrows;
+    }
+
+    function setPlayerRadarAnchorName(name = '') {
+      settings = normalizeSettings({
+        ...settings,
+        radarAnchorName: normalizeRadarAnchorName(name),
+      });
+      state.settings = settings;
+      persistSettings();
+      updatePlayerAnchorToggle();
+      if (settings.playerArrows) {
+        installPlayerArrowOverlay();
+      }
+      return settings.radarAnchorName;
     }
 
     function readMassText(cellId, mass, now) {
@@ -6740,6 +6760,7 @@
 
       installPlayerArrowStyle();
       ensurePlayerArrowToggle();
+      ensurePlayerAnchorToggle();
       const draw = () => {
         arrowFrame = win.requestAnimationFrame?.(draw) || 0;
         try {
@@ -6779,8 +6800,13 @@
       const now = Date.now();
       const freshPlayers = getVisiblePlayers()
         .filter((player) => player.screenAt && now - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
-      const anchor = getOwnRadarAnchor(freshPlayers, rect);
-      const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
+      const allPlayers = groupRadarPlayers(freshPlayers);
+      const anchor = getRadarAnchor(freshPlayers, allPlayers, rect);
+      const anchorName = normalizeRadarAnchorName(anchor.name);
+      const players = allPlayers
+        .filter((player) => !player.own)
+        .filter((player) => normalizeRadarAnchorName(player.name) !== anchorName)
+        .slice(0, 20);
       const arrowRadius = clampNumber(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
       const centerX = clampNumber(anchor.x, arrowRadius + 18, rect.width - arrowRadius - 18, rect.width / 2);
       const centerY = clampNumber(anchor.y, arrowRadius + 18, rect.height - arrowRadius - 18, rect.height / 2);
@@ -6798,6 +6824,7 @@
         centerY: roundNumber(centerY),
         radius: roundNumber(arrowRadius),
         anchor,
+        lockedAnchorName: settings.radarAnchorName,
         players: players.length,
       };
 
@@ -6806,9 +6833,21 @@
       }
     }
 
-    function getOwnRadarAnchor(freshPlayers, rect) {
+    function getRadarAnchor(freshPlayers, groupedPlayers, rect) {
+      const lockedName = normalizeRadarAnchorName(settings.radarAnchorName);
+      if (lockedName) {
+        const locked = groupedPlayers.find((player) => normalizeRadarAnchorName(player.name) === lockedName);
+        if (locked) {
+          return createRadarAnchor([locked], rect, 'locked-name');
+        }
+      }
+
       const ownCells = freshPlayers.filter((player) => player.own);
       const anchorCells = ownCells.length ? ownCells : chooseFallbackAnchorCells(freshPlayers);
+      return createRadarAnchor(anchorCells, rect, ownCells.length ? 'game-own-cell' : 'largest-visible-cell');
+    }
+
+    function createRadarAnchor(anchorCells, rect, anchorType) {
       if (!anchorCells.length) {
         return {
           x: rect.width / 2,
@@ -6848,7 +6887,7 @@
         worldX: roundNumber(weightedWorldX / totalMass),
         worldY: roundNumber(weightedWorldY / totalMass),
         projected: projectedWeight > 0,
-        anchor: ownCells.length ? 'game-own-cell' : 'largest-visible-cell',
+        anchor: anchorType,
         name: String(biggest?.name || ''),
         mass: Math.round(Number(biggest?.mass) || 0),
       };
@@ -7161,6 +7200,32 @@
     border-color: rgba(255, 220, 86, 0.72);
     color: rgba(255, 238, 166, 0.98);
   }
+
+  #${PLAYER_ANCHOR_TOGGLE_ID} {
+    position: fixed;
+    right: 14px;
+    top: 136px;
+    z-index: 2147483001;
+    max-width: 190px;
+    height: 34px;
+    padding: 0 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 7px;
+    background: rgba(12, 16, 24, 0.72);
+    color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+    cursor: pointer;
+    font: 700 12px Arial, sans-serif;
+    pointer-events: auto;
+  }
+
+  #${PLAYER_ANCHOR_TOGGLE_ID}[data-locked="true"] {
+    border-color: rgba(80, 220, 130, 0.72);
+    color: rgba(172, 255, 202, 0.98);
+  }
   `;
       (doc.head || doc.documentElement).appendChild(style);
     }
@@ -7189,6 +7254,34 @@
       return button;
     }
 
+    function ensurePlayerAnchorToggle() {
+      const doc = win.document;
+      if (!doc?.body) {
+        return null;
+      }
+
+      let button = doc.getElementById?.(PLAYER_ANCHOR_TOGGLE_ID);
+      if (!button) {
+        button = doc.createElement('button');
+        button.id = PLAYER_ANCHOR_TOGGLE_ID;
+        button.type = 'button';
+        button.addEventListener?.('click', (event) => {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          const current = settings.radarAnchorName || '';
+          const next = win.prompt?.('Radar anchor name. Leave empty for Auto.', current);
+          if (next !== null && next !== undefined) {
+            setPlayerRadarAnchorName(next);
+          }
+          button.blur?.();
+        });
+        doc.body.appendChild(button);
+      }
+
+      updatePlayerAnchorToggle(button);
+      return button;
+    }
+
     function updatePlayerArrowToggle(button = win.document?.getElementById?.(PLAYER_ARROW_TOGGLE_ID)) {
       if (!button) {
         return;
@@ -7199,6 +7292,18 @@
       button.textContent = enabled ? 'Arrows: ON' : 'Arrows: OFF';
       button.setAttribute('aria-pressed', String(enabled));
       button.setAttribute('aria-label', enabled ? 'Turn visible player arrows off' : 'Turn visible player arrows on');
+    }
+
+    function updatePlayerAnchorToggle(button = win.document?.getElementById?.(PLAYER_ANCHOR_TOGGLE_ID)) {
+      if (!button) {
+        return;
+      }
+
+      const name = normalizeRadarAnchorName(settings.radarAnchorName);
+      button.dataset.locked = String(Boolean(name));
+      button.textContent = name ? `Anchor: ${name.slice(0, 18)}` : 'Anchor: Auto';
+      button.title = name ? `Radar anchor locked to ${name}` : 'Radar anchor follows your player';
+      button.setAttribute('aria-label', name ? `Radar anchor locked to ${name}` : 'Radar anchor follows your player');
     }
 
     function getDevicePixelRatio() {
@@ -7416,6 +7521,7 @@
           'BlobioShowMassDebug()',
           'blobioCellMassDebug()',
           'BlobioVisiblePlayers()',
+          'BlobioRadarAnchorName("player name")',
         ],
         errors: state.errors.slice(-8),
       };
@@ -7440,6 +7546,7 @@
         nameGap: 1.2,
         updateDelayMs: 3000,
         playerArrows: false,
+        radarAnchorName: '',
       };
 
       return {
@@ -7453,7 +7560,12 @@
         nameGap: clampNumber(source.nameGap, 0.1, 3, defaults.nameGap),
         updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 10000, defaults.updateDelayMs)),
         playerArrows: source.playerArrows === undefined ? defaults.playerArrows : Boolean(source.playerArrows),
+        radarAnchorName: source.radarAnchorName === undefined ? defaults.radarAnchorName : normalizeRadarAnchorName(source.radarAnchorName),
       };
+    }
+
+    function normalizeRadarAnchorName(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
     }
 
     function persistSettings() {

@@ -20,6 +20,7 @@ export const DEFAULT_CELL_MASS_SETTINGS = Object.freeze({
   nameGap: 1.2,
   updateDelayMs: 3000,
   playerArrows: false,
+  radarAnchorName: '',
 });
 
 export function readCellMassSettings(storage, document = globalThis.document) {
@@ -102,7 +103,14 @@ export function normalizeCellMassSettings(settings = {}) {
     playerArrows: source.playerArrows === undefined
       ? DEFAULT_CELL_MASS_SETTINGS.playerArrows
       : Boolean(source.playerArrows),
+    radarAnchorName: source.radarAnchorName === undefined
+      ? DEFAULT_CELL_MASS_SETTINGS.radarAnchorName
+      : normalizeRadarAnchorName(source.radarAnchorName),
   };
+}
+
+function normalizeRadarAnchorName(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function normalizeMode(value) {

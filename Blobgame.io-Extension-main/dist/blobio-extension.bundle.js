@@ -82,7 +82,8 @@
     yOffset: 10,
     nameGap: 1.2,
     updateDelayMs: 3e3,
-    playerArrows: false
+    playerArrows: false,
+    radarAnchorName: ""
   });
   function readCellMassSettings(storage, document = globalThis.document) {
     const storedSnapshot = parseCellMassSnapshot(storage?.getItem?.(CELL_MASS_SNAPSHOT_KEY));
@@ -147,8 +148,12 @@
       yOffset: clampNumber(source.yOffset, -120, 120, preset.yOffset),
       nameGap: clampNumber(source.nameGap, 0.1, 3, preset.nameGap),
       updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 1e4, DEFAULT_CELL_MASS_SETTINGS.updateDelayMs)),
-      playerArrows: source.playerArrows === void 0 ? DEFAULT_CELL_MASS_SETTINGS.playerArrows : Boolean(source.playerArrows)
+      playerArrows: source.playerArrows === void 0 ? DEFAULT_CELL_MASS_SETTINGS.playerArrows : Boolean(source.playerArrows),
+      radarAnchorName: source.radarAnchorName === void 0 ? DEFAULT_CELL_MASS_SETTINGS.radarAnchorName : normalizeRadarAnchorName(source.radarAnchorName)
     };
+  }
+  function normalizeRadarAnchorName(value) {
+    return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
   }
   function normalizeMode(value) {
     const mode = String(value || "").trim().toLowerCase();
@@ -192,7 +197,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.22";
+    const SCRIPT_VERSION = "0.1.23";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -207,6 +212,7 @@
     const RADAR_PLAYER_MAX_AGE_MS = 120;
     const PLAYER_ARROW_CANVAS_ID = "blobio-visible-player-arrows";
     const PLAYER_ARROW_TOGGLE_ID = "blobio-visible-player-toggle";
+    const PLAYER_ANCHOR_TOGGLE_ID = "blobio-visible-player-anchor";
     let settings = normalizeSettings2(initialSettings);
     let lastCacheSweep = 0;
     let arrowFrame = 0;
@@ -251,6 +257,8 @@
     win.__BlobioVisiblePlayers = getVisiblePlayers;
     win.BlobioPlayerArrows = setPlayerArrowsEnabled;
     win.__BlobioPlayerArrows = setPlayerArrowsEnabled;
+    win.BlobioRadarAnchorName = setPlayerRadarAnchorName;
+    win.__BlobioRadarAnchorName = setPlayerRadarAnchorName;
     win.__blobioCellMassCaptureDraw = captureDrawState;
     if (win.__BLOBIO_CELL_MASS_TEST__) {
       win.__BlobioCellMassTestApi = {
@@ -380,10 +388,24 @@
       state.settings = settings;
       persistSettings();
       updatePlayerArrowToggle();
+      updatePlayerAnchorToggle();
       if (settings.playerArrows) {
         installPlayerArrowOverlay();
       }
       return settings.playerArrows;
+    }
+    function setPlayerRadarAnchorName(name = "") {
+      settings = normalizeSettings2({
+        ...settings,
+        radarAnchorName: normalizeRadarAnchorName2(name)
+      });
+      state.settings = settings;
+      persistSettings();
+      updatePlayerAnchorToggle();
+      if (settings.playerArrows) {
+        installPlayerArrowOverlay();
+      }
+      return settings.radarAnchorName;
     }
     function readMassText(cellId, mass, now2) {
       const key = String(cellId ?? `mass-${mass}`);
@@ -508,6 +530,7 @@
       }
       installPlayerArrowStyle();
       ensurePlayerArrowToggle();
+      ensurePlayerAnchorToggle();
       const draw = () => {
         arrowFrame = win.requestAnimationFrame?.(draw) || 0;
         try {
@@ -541,8 +564,10 @@
       context.clearRect(0, 0, rect.width, rect.height);
       const now2 = Date.now();
       const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
-      const anchor = getOwnRadarAnchor(freshPlayers, rect);
-      const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
+      const allPlayers = groupRadarPlayers(freshPlayers);
+      const anchor = getRadarAnchor(freshPlayers, allPlayers, rect);
+      const anchorName = normalizeRadarAnchorName2(anchor.name);
+      const players = allPlayers.filter((player) => !player.own).filter((player) => normalizeRadarAnchorName2(player.name) !== anchorName).slice(0, 20);
       const arrowRadius = clampNumber2(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
       const centerX = clampNumber2(anchor.x, arrowRadius + 18, rect.width - arrowRadius - 18, rect.width / 2);
       const centerY = clampNumber2(anchor.y, arrowRadius + 18, rect.height - arrowRadius - 18, rect.height / 2);
@@ -558,15 +583,26 @@
         centerY: roundNumber(centerY),
         radius: roundNumber(arrowRadius),
         anchor,
+        lockedAnchorName: settings.radarAnchorName,
         players: players.length
       };
       if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
         state.arrowOverlay = null;
       }
     }
-    function getOwnRadarAnchor(freshPlayers, rect) {
+    function getRadarAnchor(freshPlayers, groupedPlayers, rect) {
+      const lockedName = normalizeRadarAnchorName2(settings.radarAnchorName);
+      if (lockedName) {
+        const locked = groupedPlayers.find((player) => normalizeRadarAnchorName2(player.name) === lockedName);
+        if (locked) {
+          return createRadarAnchor([locked], rect, "locked-name");
+        }
+      }
       const ownCells = freshPlayers.filter((player) => player.own);
       const anchorCells = ownCells.length ? ownCells : chooseFallbackAnchorCells(freshPlayers);
+      return createRadarAnchor(anchorCells, rect, ownCells.length ? "game-own-cell" : "largest-visible-cell");
+    }
+    function createRadarAnchor(anchorCells, rect, anchorType) {
       if (!anchorCells.length) {
         return {
           x: rect.width / 2,
@@ -604,7 +640,7 @@
         worldX: roundNumber(weightedWorldX / totalMass),
         worldY: roundNumber(weightedWorldY / totalMass),
         projected: projectedWeight > 0,
-        anchor: ownCells.length ? "game-own-cell" : "largest-visible-cell",
+        anchor: anchorType,
         name: String(biggest?.name || ""),
         mass: Math.round(Number(biggest?.mass) || 0)
       };
@@ -884,6 +920,32 @@
   border-color: rgba(255, 220, 86, 0.72);
   color: rgba(255, 238, 166, 0.98);
 }
+
+#${PLAYER_ANCHOR_TOGGLE_ID} {
+  position: fixed;
+  right: 14px;
+  top: 136px;
+  z-index: 2147483001;
+  max-width: 190px;
+  height: 34px;
+  padding: 0 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 7px;
+  background: rgba(12, 16, 24, 0.72);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  font: 700 12px Arial, sans-serif;
+  pointer-events: auto;
+}
+
+#${PLAYER_ANCHOR_TOGGLE_ID}[data-locked="true"] {
+  border-color: rgba(80, 220, 130, 0.72);
+  color: rgba(172, 255, 202, 0.98);
+}
 `;
       (doc.head || doc.documentElement).appendChild(style);
     }
@@ -908,6 +970,31 @@
       updatePlayerArrowToggle(button);
       return button;
     }
+    function ensurePlayerAnchorToggle() {
+      const doc = win.document;
+      if (!doc?.body) {
+        return null;
+      }
+      let button = doc.getElementById?.(PLAYER_ANCHOR_TOGGLE_ID);
+      if (!button) {
+        button = doc.createElement("button");
+        button.id = PLAYER_ANCHOR_TOGGLE_ID;
+        button.type = "button";
+        button.addEventListener?.("click", (event) => {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          const current = settings.radarAnchorName || "";
+          const next = win.prompt?.("Radar anchor name. Leave empty for Auto.", current);
+          if (next !== null && next !== void 0) {
+            setPlayerRadarAnchorName(next);
+          }
+          button.blur?.();
+        });
+        doc.body.appendChild(button);
+      }
+      updatePlayerAnchorToggle(button);
+      return button;
+    }
     function updatePlayerArrowToggle(button = win.document?.getElementById?.(PLAYER_ARROW_TOGGLE_ID)) {
       if (!button) {
         return;
@@ -917,6 +1004,16 @@
       button.textContent = enabled ? "Arrows: ON" : "Arrows: OFF";
       button.setAttribute("aria-pressed", String(enabled));
       button.setAttribute("aria-label", enabled ? "Turn visible player arrows off" : "Turn visible player arrows on");
+    }
+    function updatePlayerAnchorToggle(button = win.document?.getElementById?.(PLAYER_ANCHOR_TOGGLE_ID)) {
+      if (!button) {
+        return;
+      }
+      const name = normalizeRadarAnchorName2(settings.radarAnchorName);
+      button.dataset.locked = String(Boolean(name));
+      button.textContent = name ? `Anchor: ${name.slice(0, 18)}` : "Anchor: Auto";
+      button.title = name ? `Radar anchor locked to ${name}` : "Radar anchor follows your player";
+      button.setAttribute("aria-label", name ? `Radar anchor locked to ${name}` : "Radar anchor follows your player");
     }
     function getDevicePixelRatio() {
       return Math.max(1, Math.min(3, Number(win.devicePixelRatio) || 1));
@@ -1095,7 +1192,8 @@
           "BlobioCellMassDebug()",
           "BlobioShowMassDebug()",
           "blobioCellMassDebug()",
-          "BlobioVisiblePlayers()"
+          "BlobioVisiblePlayers()",
+          'BlobioRadarAnchorName("player name")'
         ],
         errors: state.errors.slice(-8)
       };
@@ -1118,7 +1216,8 @@
         yOffset: 10,
         nameGap: 1.2,
         updateDelayMs: 3e3,
-        playerArrows: false
+        playerArrows: false,
+        radarAnchorName: ""
       };
       return {
         enabled: source.enabled === void 0 ? defaults.enabled : Boolean(source.enabled),
@@ -1130,8 +1229,12 @@
         yOffset: clampNumber2(source.yOffset, -120, 120, defaults.yOffset),
         nameGap: clampNumber2(source.nameGap, 0.1, 3, defaults.nameGap),
         updateDelayMs: Math.round(clampNumber2(source.updateDelayMs, 0, 1e4, defaults.updateDelayMs)),
-        playerArrows: source.playerArrows === void 0 ? defaults.playerArrows : Boolean(source.playerArrows)
+        playerArrows: source.playerArrows === void 0 ? defaults.playerArrows : Boolean(source.playerArrows),
+        radarAnchorName: source.radarAnchorName === void 0 ? defaults.radarAnchorName : normalizeRadarAnchorName2(source.radarAnchorName)
       };
+    }
+    function normalizeRadarAnchorName2(value) {
+      return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
     }
     function persistSettings() {
       const snapshot = {
@@ -15941,7 +16044,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.98";
+  var DEFAULT_EXTENSION_VERSION = "0.1.99";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21576,7 +21679,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.98";
+  var EXTENSION_VERSION = "0.1.99";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
