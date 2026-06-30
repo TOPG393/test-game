@@ -1,8 +1,8 @@
 import { createBlobioStorage } from '../storage/BlobioStorage.js';
 
 const DEFAULT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_VIP_URL = 'https://raw.githubusercontent.com/TOPG393/test-game/main/data/roles/vip.json';
-const DEFAULT_ADMIN_URL = 'https://raw.githubusercontent.com/TOPG393/test-game/main/data/roles/admins.json';
+const DEFAULT_VIP_URL = 'https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/data/roles/vip.json';
+const DEFAULT_ADMIN_URL = 'https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/data/roles/admins.json';
 const VIP_CACHE_KEY = 'blobio.roles.vipCache';
 const ADMIN_CACHE_KEY = 'blobio.roles.adminCache';
 

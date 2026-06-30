@@ -504,7 +504,7 @@
       );
       const drawPatch = [
         "Gm(a.i,a.c,g.B,b,c);d=true}}",
-        "if(g.p&&$wnd.BlobioCellMassDraw){",
+        "if($wnd.BlobioCellMassDraw){",
         "h=$wnd.BlobioCellMassDraw(g.n,g.w*g.w/100,g.w,g.M,g.N,g.B,d,d?f:0,0,qxe.g/100);",
         "if(h&&h.text){",
         "f=d?a.o.b:0;",
@@ -1554,8 +1554,8 @@
 
   // src/roles/RoleRegistry.js
   var DEFAULT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1e3;
-  var DEFAULT_VIP_URL = "https://raw.githubusercontent.com/SkyViewBlobio/Blobgame.io-Web-Script/main/data/roles/vip.json";
-  var DEFAULT_ADMIN_URL = "https://raw.githubusercontent.com/SkyViewBlobio/Blobgame.io-Web-Script/main/data/roles/admins.json";
+  var DEFAULT_VIP_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/data/roles/vip.json";
+  var DEFAULT_ADMIN_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/data/roles/admins.json";
   var VIP_CACHE_KEY = "blobio.roles.vipCache";
   var ADMIN_CACHE_KEY = "blobio.roles.adminCache";
   function normalizeUid(value) {
@@ -12865,7 +12865,7 @@ html.${className} .blobio-watermark-extension::after {
   };
 
   // src/cellMass/CellMassSettingsUi.js
-  var DESCRIPTION = "FPS-Impact: Low[5-30]\nRenders mass on your cells";
+  var DESCRIPTION = "FPS-Impact: Medium[10-60]\nRenders mass on visible player cells";
   var MODE_ORDER = ["normal", "vip", "custom"];
   var MODE_LABELS = {
     normal: "Normal",
@@ -20759,7 +20759,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
   var EXTENSION_VERSION = "0.1.83";
-  var VIP_BADGE_URL = "https://raw.githubusercontent.com/SkyViewBlobio/Blobgame.io-Extension/main/assets/VIP_icon_plus.png";
+  var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
     hi: emote_hi_default,

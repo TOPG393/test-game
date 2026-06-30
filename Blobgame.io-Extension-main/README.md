@@ -11,7 +11,7 @@ This install URL only works for normal Tampermonkey users.
 Install this loader in Tampermonkey:
 
 ```text
-https://raw.githubusercontent.com/TOPG393/test-game/main/loader/blobio-loader.user.js
+https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/loader/blobio-loader.user.js
 ```
 
 Existing installs before `0.1.19` should use Tampermonkey's update check or be reinstalled once.
@@ -19,7 +19,7 @@ Existing installs before `0.1.19` should use Tampermonkey's update check or be r
 The loader fetches:
 
 ```text
-https://cdn.jsdelivr.net/gh/TOPG393/test-game@main/dist/blobio-extension.bundle.js
+https://cdn.jsdelivr.net/gh/TOPG393/test-game@main/Blobgame.io-Extension-main/dist/blobio-extension.bundle.js
 ```
 
 ## Development

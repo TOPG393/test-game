@@ -54,7 +54,7 @@ import { pageVirusMotherCellBootstrap } from './virus/pageVirusMotherCellBootstr
 
 const INSTANCE_KEY = '__blobioExtension';
 const EXTENSION_VERSION = '0.1.83';
-const VIP_BADGE_URL = 'https://raw.githubusercontent.com/TOPG393/test-game/main/assets/VIP_icon_plus.png';
+const VIP_BADGE_URL = 'https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png';
 const EMOTE_SKIN_ASSETS = {
   cool: emoteCoolUrl,
   hi: emoteHiUrl,

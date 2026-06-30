@@ -4,7 +4,7 @@ import {
   saveCellMassSettings,
 } from './CellMassSettings.js';
 
-const DESCRIPTION = 'FPS-Impact: Low[5-30]\nRenders mass on your cells';
+const DESCRIPTION = 'FPS-Impact: Medium[10-60]\nRenders mass on visible player cells';
 const MODE_ORDER = ['normal', 'vip', 'custom'];
 const MODE_LABELS = {
   normal: 'Normal',
