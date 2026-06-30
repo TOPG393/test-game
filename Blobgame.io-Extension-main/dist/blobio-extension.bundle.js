@@ -192,7 +192,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.21";
+    const SCRIPT_VERSION = "0.1.22";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -543,9 +543,9 @@
       const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
       const anchor = getOwnRadarAnchor(freshPlayers, rect);
       const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
       const arrowRadius = clampNumber2(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
+      const centerX = clampNumber2(anchor.x, arrowRadius + 18, rect.width - arrowRadius - 18, rect.width / 2);
+      const centerY = clampNumber2(anchor.y, arrowRadius + 18, rect.height - arrowRadius - 18, rect.height / 2);
       drawPlayerArrowRing(context, centerX, centerY, arrowRadius);
       for (const player of players) {
         const delta = getPlayerDirectionDelta(player, anchor, rect);
@@ -15941,7 +15941,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.97";
+  var DEFAULT_EXTENSION_VERSION = "0.1.98";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21576,7 +21576,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.97";
+  var EXTENSION_VERSION = "0.1.98";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,

@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.21';
+  const SCRIPT_VERSION = '0.1.22';
   const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
   const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
   const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -417,9 +417,9 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       .filter((player) => player.screenAt && now - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
     const anchor = getOwnRadarAnchor(freshPlayers, rect);
     const players = groupRadarPlayers(freshPlayers.filter((player) => !player.own)).slice(0, 20);
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
     const arrowRadius = clampNumber(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
+    const centerX = clampNumber(anchor.x, arrowRadius + 18, rect.width - arrowRadius - 18, rect.width / 2);
+    const centerY = clampNumber(anchor.y, arrowRadius + 18, rect.height - arrowRadius - 18, rect.height / 2);
 
     drawPlayerArrowRing(context, centerX, centerY, arrowRadius);
     for (const player of players) {
