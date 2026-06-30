@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.101
+// @version      0.1.102
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.99';
+  const VERSION = '0.1.100';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -623,7 +623,7 @@
     nameGap: 1.2,
     updateDelayMs: 3000,
     playerArrows: false,
-    radarAnchorName: '',
+    radarAnchorName: 'topg',
   };
 
   function normalizeCellMassRuntimeSnapshot(value) {
@@ -6376,7 +6376,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.23';
+    const SCRIPT_VERSION = '0.1.24';
     const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
     const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
     const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -7546,7 +7546,7 @@
         nameGap: 1.2,
         updateDelayMs: 3000,
         playerArrows: false,
-        radarAnchorName: '',
+        radarAnchorName: 'topg',
       };
 
       return {

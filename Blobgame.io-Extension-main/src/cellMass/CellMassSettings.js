@@ -20,7 +20,7 @@ export const DEFAULT_CELL_MASS_SETTINGS = Object.freeze({
   nameGap: 1.2,
   updateDelayMs: 3000,
   playerArrows: false,
-  radarAnchorName: '',
+  radarAnchorName: 'topg',
 });
 
 export function readCellMassSettings(storage, document = globalThis.document) {

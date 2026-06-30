@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.23';
+  const SCRIPT_VERSION = '0.1.24';
   const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
   const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
   const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -1180,7 +1180,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       nameGap: 1.2,
       updateDelayMs: 3000,
       playerArrows: false,
-      radarAnchorName: '',
+      radarAnchorName: 'topg',
     };
 
     return {

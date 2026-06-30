@@ -83,7 +83,7 @@
     nameGap: 1.2,
     updateDelayMs: 3e3,
     playerArrows: false,
-    radarAnchorName: ""
+    radarAnchorName: "topg"
   });
   function readCellMassSettings(storage, document = globalThis.document) {
     const storedSnapshot = parseCellMassSnapshot(storage?.getItem?.(CELL_MASS_SNAPSHOT_KEY));
@@ -197,7 +197,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.23";
+    const SCRIPT_VERSION = "0.1.24";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -1217,7 +1217,7 @@
         nameGap: 1.2,
         updateDelayMs: 3e3,
         playerArrows: false,
-        radarAnchorName: ""
+        radarAnchorName: "topg"
       };
       return {
         enabled: source.enabled === void 0 ? defaults.enabled : Boolean(source.enabled),
@@ -16044,7 +16044,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.99";
+  var DEFAULT_EXTENSION_VERSION = "0.1.100";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21679,7 +21679,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.99";
+  var EXTENSION_VERSION = "0.1.100";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
