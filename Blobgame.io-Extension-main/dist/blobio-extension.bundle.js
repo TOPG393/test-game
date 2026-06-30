@@ -190,7 +190,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.10";
+    const SCRIPT_VERSION = "0.1.11";
     const CACHE_SCRIPT_RE2 = /\/html\/[a-f0-9]{32}\.cache\.js(?:[?#].*)?$/i;
     const DRAW_HOOK_NAME = "BlobioCellMassDraw";
     const PATCH_MARKER = "BlobioCellMassDraw";
@@ -200,6 +200,7 @@
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2e3;
     const PLAYER_ARROW_CANVAS_ID = "blobio-visible-player-arrows";
+    const PLAYER_ARROW_TOGGLE_ID = "blobio-visible-player-toggle";
     let settings = normalizeSettings2(initialSettings);
     let lastCacheSweep = 0;
     let arrowFrame = 0;
@@ -366,6 +367,7 @@
         playerArrows: Boolean(enabled)
       });
       state.settings = settings;
+      updatePlayerArrowToggle();
       if (settings.playerArrows) {
         installPlayerArrowOverlay();
       }
@@ -493,6 +495,7 @@
         return;
       }
       installPlayerArrowStyle();
+      ensurePlayerArrowToggle();
       const draw = () => {
         arrowFrame = win.requestAnimationFrame?.(draw) || 0;
         try {
@@ -685,8 +688,61 @@
   pointer-events: none;
   opacity: 0.96;
 }
+
+#${PLAYER_ARROW_TOGGLE_ID} {
+  position: fixed;
+  right: 14px;
+  top: 96px;
+  z-index: 2147483001;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 7px;
+  background: rgba(12, 16, 24, 0.72);
+  color: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  font: 700 12px Arial, sans-serif;
+  pointer-events: auto;
+}
+
+#${PLAYER_ARROW_TOGGLE_ID}[data-enabled="true"] {
+  border-color: rgba(255, 220, 86, 0.72);
+  color: rgba(255, 238, 166, 0.98);
+}
 `;
       (doc.head || doc.documentElement).appendChild(style);
+    }
+    function ensurePlayerArrowToggle() {
+      const doc = win.document;
+      if (!doc?.body) {
+        return null;
+      }
+      let button = doc.getElementById?.(PLAYER_ARROW_TOGGLE_ID);
+      if (!button) {
+        button = doc.createElement("button");
+        button.id = PLAYER_ARROW_TOGGLE_ID;
+        button.type = "button";
+        button.addEventListener?.("click", (event) => {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          setPlayerArrowsEnabled(!settings.playerArrows);
+        });
+        doc.body.appendChild(button);
+      }
+      updatePlayerArrowToggle(button);
+      return button;
+    }
+    function updatePlayerArrowToggle(button = win.document?.getElementById?.(PLAYER_ARROW_TOGGLE_ID)) {
+      if (!button) {
+        return;
+      }
+      const enabled = Boolean(settings.playerArrows);
+      button.dataset.enabled = String(enabled);
+      button.textContent = enabled ? "Radar: ON" : "Radar: OFF";
+      button.setAttribute("aria-pressed", String(enabled));
+      button.setAttribute("aria-label", enabled ? "Turn visible player radar off" : "Turn visible player radar on");
     }
     function getDevicePixelRatio() {
       return Math.max(1, Math.min(3, Number(win.devicePixelRatio) || 1));
@@ -15684,7 +15740,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.86";
+  var DEFAULT_EXTENSION_VERSION = "0.1.87";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21319,7 +21375,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.86";
+  var EXTENSION_VERSION = "0.1.87";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
