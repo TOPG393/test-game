@@ -20,8 +20,6 @@ export const EMOTE_SKIN_TRIGGERS = [
   { id: 'wink-pop', emoji: '😉', aliases: ['😉'], assetKey: 'pop', label: 'Wink pop' },
 ];
 
-const CUSTOM_IMAGE_URL_MATCH = /^https?:\/\/.+\.(?:png|jpe?g|webp|gif)(?:[?#].*)?$/i;
-
 export function normalizeCustomEmoteTrigger(value) {
   const trigger = String(value || '').replace(/\s+/g, '').trim();
   return trigger.slice(0, 18);
@@ -29,12 +27,9 @@ export function normalizeCustomEmoteTrigger(value) {
 
 export function normalizeCustomEmoteUrl(value) {
   const url = String(value || '').trim();
-  if (!CUSTOM_IMAGE_URL_MATCH.test(url)) {
-    return '';
-  }
-
   try {
-    return new URL(url).toString();
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
   } catch {
     return '';
   }

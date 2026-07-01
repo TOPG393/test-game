@@ -270,7 +270,7 @@ export class EmoteSkinFeature {
     const trigger = normalizeCustomEmoteTrigger(this.customTriggerInput?.value);
     const url = normalizeCustomEmoteUrl(this.customUrlInput?.value);
     if (!trigger || !url) {
-      this.setCustomError('Use a trigger and direct image URL.');
+      this.setCustomError('Use a trigger and http(s) image URL.');
       return false;
     }
 
@@ -663,7 +663,7 @@ export class EmoteSkinFeature {
     }
 
     return {
-      version: '0.1.2',
+      version: '0.1.3',
       url: this.document.defaultView?.location?.href || globalThis.location?.href || '',
       uptimeMs: Date.now() - this.debug.startedAt,
       enabled: isEmoteSkinEnabled(this.storage),

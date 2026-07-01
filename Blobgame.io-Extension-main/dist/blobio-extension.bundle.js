@@ -3248,18 +3248,15 @@
     { id: "pop", emoji: "\u26BD\uFE0F", aliases: ["\u26BD\uFE0F", "\u26BD"], assetKey: "pop", label: "Pop" },
     { id: "wink-pop", emoji: "\u{1F609}", aliases: ["\u{1F609}"], assetKey: "pop", label: "Wink pop" }
   ];
-  var CUSTOM_IMAGE_URL_MATCH = /^https?:\/\/.+\.(?:png|jpe?g|webp|gif)(?:[?#].*)?$/i;
   function normalizeCustomEmoteTrigger(value) {
     const trigger = String(value || "").replace(/\s+/g, "").trim();
     return trigger.slice(0, 18);
   }
   function normalizeCustomEmoteUrl(value) {
     const url = String(value || "").trim();
-    if (!CUSTOM_IMAGE_URL_MATCH.test(url)) {
-      return "";
-    }
     try {
-      return new URL(url).toString();
+      const parsed = new URL(url);
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : "";
     } catch {
       return "";
     }
@@ -3565,7 +3562,7 @@
       const trigger = normalizeCustomEmoteTrigger(this.customTriggerInput?.value);
       const url = normalizeCustomEmoteUrl(this.customUrlInput?.value);
       if (!trigger || !url) {
-        this.setCustomError("Use a trigger and direct image URL.");
+        this.setCustomError("Use a trigger and http(s) image URL.");
         return false;
       }
       const customEmotes = this.getCustomEmotes();
@@ -3904,7 +3901,7 @@
         }
       }
       return {
-        version: "0.1.2",
+        version: "0.1.3",
         url: this.document.defaultView?.location?.href || globalThis.location?.href || "",
         uptimeMs: Date.now() - this.debug.startedAt,
         enabled: isEmoteSkinEnabled(this.storage),
@@ -16750,7 +16747,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.105";
+  var DEFAULT_EXTENSION_VERSION = "0.1.106";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -22374,7 +22371,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.105";
+  var EXTENSION_VERSION = "0.1.106";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
