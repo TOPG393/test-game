@@ -1,4 +1,5 @@
 import { normalizeUid } from '../roles/RoleRegistry.js';
+import { getTampermonkeyPageWindow } from '../runtimePageWindow.js';
 import { createBlobioStorage } from '../storage/BlobioStorage.js';
 
 const API_HOST = 'api.blobgame.io';
@@ -111,6 +112,25 @@ function directUidFromRecord(record) {
   return '';
 }
 
+function normalizeFriendName(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function directNameFromRecord(record) {
+  if (!record || typeof record !== 'object') {
+    return '';
+  }
+
+  for (const key of ['name', 'username', 'userName', 'nick', 'nickname', 'nickName', 'displayName', 'login']) {
+    const name = normalizeFriendName(record[key]);
+    if (name) {
+      return name;
+    }
+  }
+
+  return '';
+}
+
 function acceptedListUidFromRecord(record, rawOwnUid = '') {
   if (!record || typeof record !== 'object') {
     return '';
@@ -151,6 +171,26 @@ function acceptedListUidFromRecord(record, rawOwnUid = '') {
   }
   if (actionUid === secondUid && firstUid) {
     return firstUid;
+  }
+
+  return '';
+}
+
+function acceptedListNameFromRecord(record) {
+  if (!record || typeof record !== 'object') {
+    return '';
+  }
+
+  const directName = directNameFromRecord(record);
+  if (directName) {
+    return directName;
+  }
+
+  for (const key of ['friend', 'target', 'otherUser', 'relatedUser', 'profile', 'user']) {
+    const nestedName = directNameFromRecord(record[key]);
+    if (nestedName) {
+      return nestedName;
+    }
   }
 
   return '';
@@ -218,6 +258,24 @@ export function extractAcceptedFriendUids(payload, rawOwnUid = '') {
   return uids;
 }
 
+export function extractAcceptedFriendNames(payload) {
+  const records = Array.isArray(payload?.result)
+    ? payload.result
+    : Array.isArray(payload)
+      ? payload
+      : [];
+  const names = new Set();
+
+  for (const record of records) {
+    const name = acceptedListNameFromRecord(record);
+    if (name) {
+      names.add(name);
+    }
+  }
+
+  return names;
+}
+
 export function isAcceptedFriendRelation(payload, rawTargetUid) {
   const targetUid = normalizeUid(rawTargetUid);
   const records = Array.isArray(payload?.result) ? payload.result : [];
@@ -246,11 +304,13 @@ export class FriendRelationService {
   } = {}) {
     this.document = document;
     this.window = document?.defaultView || globalThis;
+    this.pageWindow = getTampermonkeyPageWindow(this.window);
     this.friendHighlightStore = friendHighlightStore;
     this.storage = storage;
     this.fetchFn = fetchFn || this.window.fetch?.bind(this.window) || globalThis.fetch?.bind(globalThis);
     this.logger = logger;
     this.friendUids = new Set();
+    this.friendNames = new Set();
     this.mockFriendUids = new Set();
     this.listeners = new Set();
     this.accessToken = '';
@@ -311,6 +371,10 @@ export class FriendRelationService {
 
   getAcceptedFriendUids() {
     return [...this.friendUids];
+  }
+
+  getFriendNames() {
+    return [...this.friendNames];
   }
 
   getMockFriendUids() {
@@ -399,19 +463,22 @@ export class FriendRelationService {
     this.accessToken = token;
     this.ownUid = decodeUserId(token);
     this.loadedToken = '';
-    if (this.friendUids.size > 0) {
+    if (this.friendUids.size > 0 || this.friendNames.size > 0) {
       this.friendUids = new Set();
+      this.friendNames = new Set();
       this.notify('', 'token');
     }
   }
 
   replaceFriendList(payload, source = 'friends') {
     const nextUids = extractAcceptedFriendUids(payload, this.ownUid);
-    if (sameUidSet(nextUids, this.friendUids)) {
+    const nextNames = extractAcceptedFriendNames(payload);
+    if (sameUidSet(nextUids, this.friendUids) && sameUidSet(nextNames, this.friendNames)) {
       return false;
     }
 
     this.friendUids = nextUids;
+    this.friendNames = nextNames;
     this.notify('', source);
     return true;
   }
@@ -661,8 +728,10 @@ export class FriendRelationService {
       uid: normalizeUid(uid),
       friends: this.getFriendUids(),
       acceptedFriends: this.getAcceptedFriendUids(),
+      friendNames: this.getFriendNames(),
       mockFriends: this.getMockFriendUids(),
     };
+    this.publishRadarSnapshot(snapshot, source);
 
     for (const listener of this.listeners) {
       try {
@@ -670,6 +739,28 @@ export class FriendRelationService {
       } catch (error) {
         this.logger.warn?.('[Blobio] Friend relation listener failed.', error);
       }
+    }
+  }
+
+  publishRadarSnapshot(snapshot, source) {
+    const radarSnapshot = {
+      source,
+      updatedAt: Date.now(),
+      friends: snapshot.friends || [],
+      acceptedFriends: snapshot.acceptedFriends || [],
+      friendNames: snapshot.friendNames || [],
+      mockFriends: snapshot.mockFriends || [],
+    };
+
+    for (const targetWindow of [this.window, this.pageWindow]) {
+      if (!targetWindow) {
+        continue;
+      }
+      try {
+        targetWindow.__blobioFriendRadar = radarSnapshot;
+        targetWindow.__blobioFriendNames = radarSnapshot.friendNames.slice();
+        targetWindow.__blobioFriendUids = radarSnapshot.friends.slice();
+      } catch {}
     }
   }
 
@@ -722,6 +813,7 @@ export class FriendRelationService {
     }
 
     this.friendUids.clear();
+    this.friendNames.clear();
     this.mockFriendUids.clear();
     this.listeners.clear();
     this.loadPromise = null;

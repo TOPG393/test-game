@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.105
+// @version      0.1.106
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.103';
+  const VERSION = '0.1.104';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -6378,7 +6378,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.27';
+    const SCRIPT_VERSION = '0.1.28';
     const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
     const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
     const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -6586,6 +6586,7 @@
       const projected = drawInfo?.projected ? drawInfo : null;
       const screenX = projected ? roundNumber(projected.x) : roundNumber(previous?.screenX ?? worldX);
       const screenY = projected ? roundNumber(projected.y) : roundNumber(previous?.screenY ?? worldY);
+      const knownFriend = Boolean(isFriendCell) || isKnownFriendName(name);
       visiblePlayers.set(key, {
         ...(previous || {}),
         at: now,
@@ -6604,7 +6605,7 @@
         projectionMode: projected ? 'matrix' : 'world',
         type: Number.isFinite(Number(cellType)) ? Number(cellType) : null,
         own: Boolean(isOwnCell),
-        friend: Boolean(isFriendCell),
+        friend: knownFriend,
       });
       visiblePlayersSnapshotAt = 0;
       state.counters.visiblePlayerCells += 1;
@@ -6929,7 +6930,7 @@
       const players = allPlayers
         .filter((player) => !player.own)
         .filter((player) => normalizeRadarAnchorName(player.name) !== anchorName)
-        .filter((player) => settings.radarPlayerMode !== 'friends' || player.friend)
+        .filter((player) => settings.radarPlayerMode !== 'friends' || isRadarFriend(player))
         .slice(0, 20);
       const arrowRadius = clampNumber(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
       const centerX = clampNumber(anchor.x, arrowRadius + 18, rect.width - arrowRadius - 18, rect.width / 2);
@@ -7175,6 +7176,26 @@
         x: Number(player.screenX) - rect.width / 2,
         y: Number(player.screenY) - rect.height / 2,
       };
+    }
+
+    function isRadarFriend(player) {
+      return Boolean(player?.friend) || isKnownFriendName(player?.name);
+    }
+
+    function isKnownFriendName(name) {
+      const normalizedName = normalizeRadarAnchorName(name);
+      if (!normalizedName) {
+        return false;
+      }
+
+      const snapshot = win.__blobioFriendRadar || {};
+      const names = Array.isArray(snapshot.friendNames)
+        ? snapshot.friendNames
+        : Array.isArray(win.__blobioFriendNames)
+          ? win.__blobioFriendNames
+          : [];
+
+      return names.some((friendName) => normalizeRadarAnchorName(friendName) === normalizedName);
     }
 
     function drawPlayerArrowRing(context, centerX, centerY, radius) {

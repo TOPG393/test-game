@@ -203,7 +203,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.27";
+    const SCRIPT_VERSION = "0.1.28";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -385,6 +385,7 @@
       const projected = drawInfo?.projected ? drawInfo : null;
       const screenX = projected ? roundNumber(projected.x) : roundNumber(previous?.screenX ?? worldX);
       const screenY = projected ? roundNumber(projected.y) : roundNumber(previous?.screenY ?? worldY);
+      const knownFriend = Boolean(isFriendCell) || isKnownFriendName(name);
       visiblePlayers.set(key, {
         ...previous || {},
         at: now2,
@@ -403,7 +404,7 @@
         projectionMode: projected ? "matrix" : "world",
         type: Number.isFinite(Number(cellType)) ? Number(cellType) : null,
         own: Boolean(isOwnCell),
-        friend: Boolean(isFriendCell)
+        friend: knownFriend
       });
       visiblePlayersSnapshotAt = 0;
       state.counters.visiblePlayerCells += 1;
@@ -678,7 +679,7 @@
       const rawAnchor = getRadarAnchor(freshPlayers, allPlayers, rect);
       const anchor = smoothRadarAnchor(rawAnchor, now2, rect);
       const anchorName = normalizeRadarAnchorName2(anchor.name);
-      const players = allPlayers.filter((player) => !player.own).filter((player) => normalizeRadarAnchorName2(player.name) !== anchorName).filter((player) => settings.radarPlayerMode !== "friends" || player.friend).slice(0, 20);
+      const players = allPlayers.filter((player) => !player.own).filter((player) => normalizeRadarAnchorName2(player.name) !== anchorName).filter((player) => settings.radarPlayerMode !== "friends" || isRadarFriend(player)).slice(0, 20);
       const arrowRadius = clampNumber2(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
       const centerX = clampNumber2(anchor.x, arrowRadius + 18, rect.width - arrowRadius - 18, rect.width / 2);
       const centerY = clampNumber2(anchor.y, arrowRadius + 18, rect.height - arrowRadius - 18, rect.height / 2);
@@ -887,6 +888,18 @@
         x: Number(player.screenX) - rect.width / 2,
         y: Number(player.screenY) - rect.height / 2
       };
+    }
+    function isRadarFriend(player) {
+      return Boolean(player?.friend) || isKnownFriendName(player?.name);
+    }
+    function isKnownFriendName(name) {
+      const normalizedName = normalizeRadarAnchorName2(name);
+      if (!normalizedName) {
+        return false;
+      }
+      const snapshot = win.__blobioFriendRadar || {};
+      const names = Array.isArray(snapshot.friendNames) ? snapshot.friendNames : Array.isArray(win.__blobioFriendNames) ? win.__blobioFriendNames : [];
+      return names.some((friendName) => normalizeRadarAnchorName2(friendName) === normalizedName);
     }
     function drawPlayerArrowRing(context, centerX, centerY, radius) {
       context.save();
@@ -14991,6 +15004,17 @@ html.${className} .blobio-watermark-extension::after {
     }
   };
 
+  // src/runtimePageWindow.js
+  function getTampermonkeyPageWindow(windowRef = globalThis) {
+    if (windowRef?.unsafeWindow && typeof windowRef.unsafeWindow === "object") {
+      return windowRef.unsafeWindow;
+    }
+    if (globalThis.unsafeWindow && typeof globalThis.unsafeWindow === "object") {
+      return globalThis.unsafeWindow;
+    }
+    return windowRef || globalThis;
+  }
+
   // src/friends/FriendRelationService.js
   var API_HOST = "api.blobgame.io";
   var API_ROOT = "https://api.blobgame.io:988/api";
@@ -15083,6 +15107,21 @@ html.${className} .blobio-watermark-extension::after {
     }
     return "";
   }
+  function normalizeFriendName(value) {
+    return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+  function directNameFromRecord(record) {
+    if (!record || typeof record !== "object") {
+      return "";
+    }
+    for (const key of ["name", "username", "userName", "nick", "nickname", "nickName", "displayName", "login"]) {
+      const name = normalizeFriendName(record[key]);
+      if (name) {
+        return name;
+      }
+    }
+    return "";
+  }
   function acceptedListUidFromRecord(record, rawOwnUid = "") {
     if (!record || typeof record !== "object") {
       return "";
@@ -15116,6 +15155,22 @@ html.${className} .blobio-watermark-extension::after {
     }
     if (actionUid === secondUid && firstUid) {
       return firstUid;
+    }
+    return "";
+  }
+  function acceptedListNameFromRecord(record) {
+    if (!record || typeof record !== "object") {
+      return "";
+    }
+    const directName = directNameFromRecord(record);
+    if (directName) {
+      return directName;
+    }
+    for (const key of ["friend", "target", "otherUser", "relatedUser", "profile", "user"]) {
+      const nestedName = directNameFromRecord(record[key]);
+      if (nestedName) {
+        return nestedName;
+      }
     }
     return "";
   }
@@ -15167,6 +15222,17 @@ html.${className} .blobio-watermark-extension::after {
     }
     return uids;
   }
+  function extractAcceptedFriendNames(payload) {
+    const records = Array.isArray(payload?.result) ? payload.result : Array.isArray(payload) ? payload : [];
+    const names = /* @__PURE__ */ new Set();
+    for (const record of records) {
+      const name = acceptedListNameFromRecord(record);
+      if (name) {
+        names.add(name);
+      }
+    }
+    return names;
+  }
   function isAcceptedFriendRelation(payload, rawTargetUid) {
     const targetUid = normalizeUid(rawTargetUid);
     const records = Array.isArray(payload?.result) ? payload.result : [];
@@ -15190,11 +15256,13 @@ html.${className} .blobio-watermark-extension::after {
     } = {}) {
       this.document = document;
       this.window = document?.defaultView || globalThis;
+      this.pageWindow = getTampermonkeyPageWindow(this.window);
       this.friendHighlightStore = friendHighlightStore;
       this.storage = storage;
       this.fetchFn = fetchFn || this.window.fetch?.bind(this.window) || globalThis.fetch?.bind(globalThis);
       this.logger = logger;
       this.friendUids = /* @__PURE__ */ new Set();
+      this.friendNames = /* @__PURE__ */ new Set();
       this.mockFriendUids = /* @__PURE__ */ new Set();
       this.listeners = /* @__PURE__ */ new Set();
       this.accessToken = "";
@@ -15248,6 +15316,9 @@ html.${className} .blobio-watermark-extension::after {
     }
     getAcceptedFriendUids() {
       return [...this.friendUids];
+    }
+    getFriendNames() {
+      return [...this.friendNames];
     }
     getMockFriendUids() {
       return [...this.mockFriendUids];
@@ -15318,17 +15389,20 @@ html.${className} .blobio-watermark-extension::after {
       this.accessToken = token;
       this.ownUid = decodeUserId(token);
       this.loadedToken = "";
-      if (this.friendUids.size > 0) {
+      if (this.friendUids.size > 0 || this.friendNames.size > 0) {
         this.friendUids = /* @__PURE__ */ new Set();
+        this.friendNames = /* @__PURE__ */ new Set();
         this.notify("", "token");
       }
     }
     replaceFriendList(payload, source = "friends") {
       const nextUids = extractAcceptedFriendUids(payload, this.ownUid);
-      if (sameUidSet(nextUids, this.friendUids)) {
+      const nextNames = extractAcceptedFriendNames(payload);
+      if (sameUidSet(nextUids, this.friendUids) && sameUidSet(nextNames, this.friendNames)) {
         return false;
       }
       this.friendUids = nextUids;
+      this.friendNames = nextNames;
       this.notify("", source);
       return true;
     }
@@ -15538,13 +15612,36 @@ html.${className} .blobio-watermark-extension::after {
         uid: normalizeUid(uid),
         friends: this.getFriendUids(),
         acceptedFriends: this.getAcceptedFriendUids(),
+        friendNames: this.getFriendNames(),
         mockFriends: this.getMockFriendUids()
       };
+      this.publishRadarSnapshot(snapshot, source);
       for (const listener of this.listeners) {
         try {
           listener(snapshot, source);
         } catch (error) {
           this.logger.warn?.("[Blobio] Friend relation listener failed.", error);
+        }
+      }
+    }
+    publishRadarSnapshot(snapshot, source) {
+      const radarSnapshot = {
+        source,
+        updatedAt: Date.now(),
+        friends: snapshot.friends || [],
+        acceptedFriends: snapshot.acceptedFriends || [],
+        friendNames: snapshot.friendNames || [],
+        mockFriends: snapshot.mockFriends || []
+      };
+      for (const targetWindow of [this.window, this.pageWindow]) {
+        if (!targetWindow) {
+          continue;
+        }
+        try {
+          targetWindow.__blobioFriendRadar = radarSnapshot;
+          targetWindow.__blobioFriendNames = radarSnapshot.friendNames.slice();
+          targetWindow.__blobioFriendUids = radarSnapshot.friends.slice();
+        } catch {
         }
       }
     }
@@ -15591,6 +15688,7 @@ html.${className} .blobio-watermark-extension::after {
         this.visibilityHandler = null;
       }
       this.friendUids.clear();
+      this.friendNames.clear();
       this.mockFriendUids.clear();
       this.listeners.clear();
       this.loadPromise = null;
@@ -16305,7 +16403,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.103";
+  var DEFAULT_EXTENSION_VERSION = "0.1.104";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21401,17 +21499,6 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
     }
   };
 
-  // src/runtimePageWindow.js
-  function getTampermonkeyPageWindow(windowRef = globalThis) {
-    if (windowRef?.unsafeWindow && typeof windowRef.unsafeWindow === "object") {
-      return windowRef.unsafeWindow;
-    }
-    if (globalThis.unsafeWindow && typeof globalThis.unsafeWindow === "object") {
-      return globalThis.unsafeWindow;
-    }
-    return windowRef || globalThis;
-  }
-
   // src/virus/pageVirusMotherCellBootstrap.js
   function pageVirusMotherCellBootstrap(initialConfig, pageWindow) {
     "use strict";
@@ -21940,7 +22027,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.103";
+  var EXTENSION_VERSION = "0.1.104";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
