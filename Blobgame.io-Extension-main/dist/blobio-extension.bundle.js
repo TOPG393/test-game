@@ -197,7 +197,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.24";
+    const SCRIPT_VERSION = "0.1.25";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -210,12 +210,33 @@
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2e3;
     const RADAR_PLAYER_MAX_AGE_MS = 120;
+    const VISIBLE_PLAYER_PRUNE_INTERVAL_MS = 250;
+    const VISIBLE_PLAYER_MAX_ENTRIES = 320;
+    const VISIBLE_PLAYER_SORT_CACHE_MS = 45;
+    const RADAR_GROUP_CACHE_MS = 45;
+    const LABEL_BUDGET_WINDOW_MS = 16;
+    const LABEL_BUDGET_MAX_CALLS = 120;
+    const LABEL_BUDGET_MAX_SMALL_LABELS = 52;
+    const LABEL_BUDGET_MAX_PROTECTED_LABELS = 64;
+    const LABEL_BUDGET_SMALL_MASS = 1800;
+    const LABEL_BUDGET_PROTECTED_SMALL_MASS = 3200;
     const PLAYER_ARROW_CANVAS_ID = "blobio-visible-player-arrows";
     const PLAYER_ARROW_TOGGLE_ID = "blobio-visible-player-toggle";
     const PLAYER_ANCHOR_TOGGLE_ID = "blobio-visible-player-anchor";
     let settings = normalizeSettings2(initialSettings);
     let lastCacheSweep = 0;
     let arrowFrame = 0;
+    let lastVisiblePlayerPrune = 0;
+    let visiblePlayersSnapshot = [];
+    let visiblePlayersSnapshotAt = 0;
+    let radarGroupSnapshot = null;
+    let radarGroupSnapshotAt = 0;
+    const labelBudget = {
+      windowStart: 0,
+      calls: 0,
+      smallLabels: 0,
+      protectedLabels: 0
+    };
     const labelCache = /* @__PURE__ */ new Map();
     const visiblePlayers = /* @__PURE__ */ new Map();
     const state = {
@@ -235,6 +256,7 @@
         hiddenBySetting: 0,
         hiddenByThreshold: 0,
         hiddenBySmartLimit: 0,
+        hiddenByFrameBudget: 0,
         primaryLabels: 0,
         visiblePlayerCells: 0
       },
@@ -311,6 +333,11 @@
         state.counters.hiddenBySmartLimit += 1;
         return null;
       }
+      const primary = isPrimaryLabel(safeMass, safeRawSize, safeRenderSize, totalMass);
+      if (shouldSkipLabelForFrameBudget(safeMass, primary, isOwnCell, isFriendCell)) {
+        state.counters.hiddenByFrameBudget += 1;
+        return null;
+      }
       const now2 = Date.now();
       sweepLabelCache(now2);
       const textEntry = readMassText(cellId, safeMass, now2);
@@ -318,7 +345,6 @@
         return null;
       }
       const fitScale = Number(explicitFitScale) > 0 ? Number(explicitFitScale) : getFitScale(textEntry.text, safeName, nameScale, safeRenderSize);
-      const primary = isPrimaryLabel(safeMass, safeRawSize, safeRenderSize, totalMass);
       let scale = clampNumber2(fitScale * settings.textScale, 1e-3, 1.4, settings.textScale);
       if (primary) {
         scale = Math.max(scale, readableScaleFloor(safeRawSize, safeRenderSize));
@@ -366,19 +392,48 @@
         own: Boolean(isOwnCell),
         friend: Boolean(isFriendCell)
       });
+      visiblePlayersSnapshotAt = 0;
       state.counters.visiblePlayerCells += 1;
-      pruneVisiblePlayers(now2);
+      if (now2 - lastVisiblePlayerPrune >= VISIBLE_PLAYER_PRUNE_INTERVAL_MS || visiblePlayers.size > VISIBLE_PLAYER_MAX_ENTRIES) {
+        pruneVisiblePlayers(now2);
+      }
     }
     function pruneVisiblePlayers(now2 = Date.now()) {
+      let changed = false;
       for (const [key, player] of visiblePlayers) {
         if (now2 - player.at > VISIBLE_PLAYER_MAX_AGE_MS) {
           visiblePlayers.delete(key);
+          changed = true;
         }
+      }
+      if (visiblePlayers.size > VISIBLE_PLAYER_MAX_ENTRIES) {
+        const removable = [...visiblePlayers.entries()].filter(([, player]) => !player.own).sort(([, left], [, right]) => {
+          const massDiff = (Number(left.mass) || 0) - (Number(right.mass) || 0);
+          return massDiff || (Number(left.at) || 0) - (Number(right.at) || 0);
+        });
+        for (const [key] of removable) {
+          if (visiblePlayers.size <= VISIBLE_PLAYER_MAX_ENTRIES) {
+            break;
+          }
+          visiblePlayers.delete(key);
+          changed = true;
+        }
+      }
+      lastVisiblePlayerPrune = now2;
+      if (changed) {
+        visiblePlayersSnapshotAt = 0;
+        radarGroupSnapshotAt = 0;
       }
     }
     function getVisiblePlayers() {
-      pruneVisiblePlayers();
-      return [...visiblePlayers.values()].sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
+      const now2 = Date.now();
+      pruneVisiblePlayers(now2);
+      if (visiblePlayersSnapshotAt && now2 - visiblePlayersSnapshotAt <= VISIBLE_PLAYER_SORT_CACHE_MS) {
+        return visiblePlayersSnapshot.slice();
+      }
+      visiblePlayersSnapshot = [...visiblePlayers.values()].sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
+      visiblePlayersSnapshotAt = now2;
+      return visiblePlayersSnapshot.slice();
     }
     function setPlayerArrowsEnabled(enabled = true) {
       settings = normalizeSettings2({
@@ -453,6 +508,30 @@
         return 40;
       }
       return 0;
+    }
+    function shouldSkipLabelForFrameBudget(mass, primary, isOwnCell, isFriendCell) {
+      if (!settings.smartRendering) {
+        return false;
+      }
+      const now2 = getPerfNow();
+      if (!labelBudget.windowStart || now2 - labelBudget.windowStart > LABEL_BUDGET_WINDOW_MS) {
+        labelBudget.windowStart = now2;
+        labelBudget.calls = 0;
+        labelBudget.smallLabels = 0;
+        labelBudget.protectedLabels = 0;
+      }
+      labelBudget.calls += 1;
+      const safeMass = Number(mass) || 0;
+      const protectedLabel = primary || isOwnCell || isFriendCell;
+      if (protectedLabel) {
+        labelBudget.protectedLabels += 1;
+        return labelBudget.protectedLabels > LABEL_BUDGET_MAX_PROTECTED_LABELS && safeMass < LABEL_BUDGET_PROTECTED_SMALL_MASS;
+      }
+      if (safeMass >= LABEL_BUDGET_SMALL_MASS) {
+        return false;
+      }
+      labelBudget.smallLabels += 1;
+      return labelBudget.calls > LABEL_BUDGET_MAX_CALLS || labelBudget.smallLabels > LABEL_BUDGET_MAX_SMALL_LABELS;
     }
     function getFitScale(text, name, nameScale, renderSize) {
       const textLength = Math.max(String(text || "").length, 3);
@@ -563,8 +642,9 @@
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, rect.width, rect.height);
       const now2 = Date.now();
-      const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
-      const allPlayers = groupRadarPlayers(freshPlayers);
+      const radarPlayers = getRadarPlayers(now2);
+      const freshPlayers = radarPlayers.freshPlayers;
+      const allPlayers = radarPlayers.groupedPlayers;
       const anchor = getRadarAnchor(freshPlayers, allPlayers, rect);
       const anchorName = normalizeRadarAnchorName2(anchor.name);
       const players = allPlayers.filter((player) => !player.own).filter((player) => normalizeRadarAnchorName2(player.name) !== anchorName).slice(0, 20);
@@ -584,7 +664,8 @@
         radius: roundNumber(arrowRadius),
         anchor,
         lockedAnchorName: settings.radarAnchorName,
-        players: players.length
+        players: players.length,
+        sourceCells: freshPlayers.length
       };
       if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
         state.arrowOverlay = null;
@@ -648,6 +729,16 @@
     function chooseFallbackAnchorCells(freshPlayers) {
       const biggest = freshPlayers.slice().sort((left, right) => (Number(right.mass) || 0) - (Number(left.mass) || 0))[0];
       return biggest ? [biggest] : [];
+    }
+    function getRadarPlayers(now2 = Date.now()) {
+      if (radarGroupSnapshot && now2 - radarGroupSnapshotAt <= RADAR_GROUP_CACHE_MS) {
+        return radarGroupSnapshot;
+      }
+      const freshPlayers = getVisiblePlayers().filter((player) => player.screenAt && now2 - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
+      const groupedPlayers = groupRadarPlayers(freshPlayers);
+      radarGroupSnapshot = { freshPlayers, groupedPlayers };
+      radarGroupSnapshotAt = now2;
+      return radarGroupSnapshot;
     }
     function groupRadarPlayers(players) {
       const grouped = /* @__PURE__ */ new Map();
@@ -1184,6 +1275,17 @@
           lastPatchResult: state.lastPatchResult
         },
         samples: state.samples.slice(),
+        performance: {
+          visiblePlayerCells: visiblePlayers.size,
+          labelBudget: {
+            calls: labelBudget.calls,
+            smallLabels: labelBudget.smallLabels,
+            protectedLabels: labelBudget.protectedLabels,
+            windowAgeMs: roundNumber(getPerfNow() - labelBudget.windowStart)
+          },
+          visiblePlayerCacheAgeMs: visiblePlayersSnapshotAt ? Date.now() - visiblePlayersSnapshotAt : null,
+          radarCacheAgeMs: radarGroupSnapshotAt ? Date.now() - radarGroupSnapshotAt : null
+        },
         visiblePlayers: getVisiblePlayers(),
         lastLabel: state.lastLabel,
         lastDrawCapture: state.lastDrawCapture,
@@ -1268,6 +1370,10 @@
       }
       const number = Number(value);
       return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+    }
+    function getPerfNow() {
+      const now2 = win.performance?.now?.();
+      return Number.isFinite(Number(now2)) ? Number(now2) : Date.now();
     }
     function rememberError2(message) {
       state.errors.push({
@@ -16044,7 +16150,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.100";
+  var DEFAULT_EXTENSION_VERSION = "0.1.101";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21679,7 +21785,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.100";
+  var EXTENSION_VERSION = "0.1.101";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,

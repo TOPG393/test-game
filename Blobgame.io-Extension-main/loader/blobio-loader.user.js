@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.102
+// @version      0.1.103
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.100';
+  const VERSION = '0.1.101';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -6376,7 +6376,7 @@
       return true;
     }
 
-    const SCRIPT_VERSION = '0.1.24';
+    const SCRIPT_VERSION = '0.1.25';
     const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
     const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
     const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -6389,6 +6389,16 @@
     const PRIMARY_MAX_LABEL_HEIGHT = 0.42;
     const VISIBLE_PLAYER_MAX_AGE_MS = 2000;
     const RADAR_PLAYER_MAX_AGE_MS = 120;
+    const VISIBLE_PLAYER_PRUNE_INTERVAL_MS = 250;
+    const VISIBLE_PLAYER_MAX_ENTRIES = 320;
+    const VISIBLE_PLAYER_SORT_CACHE_MS = 45;
+    const RADAR_GROUP_CACHE_MS = 45;
+    const LABEL_BUDGET_WINDOW_MS = 16;
+    const LABEL_BUDGET_MAX_CALLS = 120;
+    const LABEL_BUDGET_MAX_SMALL_LABELS = 52;
+    const LABEL_BUDGET_MAX_PROTECTED_LABELS = 64;
+    const LABEL_BUDGET_SMALL_MASS = 1800;
+    const LABEL_BUDGET_PROTECTED_SMALL_MASS = 3200;
     const PLAYER_ARROW_CANVAS_ID = 'blobio-visible-player-arrows';
     const PLAYER_ARROW_TOGGLE_ID = 'blobio-visible-player-toggle';
     const PLAYER_ANCHOR_TOGGLE_ID = 'blobio-visible-player-anchor';
@@ -6396,6 +6406,17 @@
     let settings = normalizeSettings(initialSettings);
     let lastCacheSweep = 0;
     let arrowFrame = 0;
+    let lastVisiblePlayerPrune = 0;
+    let visiblePlayersSnapshot = [];
+    let visiblePlayersSnapshotAt = 0;
+    let radarGroupSnapshot = null;
+    let radarGroupSnapshotAt = 0;
+    const labelBudget = {
+      windowStart: 0,
+      calls: 0,
+      smallLabels: 0,
+      protectedLabels: 0,
+    };
 
     const labelCache = new Map();
     const visiblePlayers = new Map();
@@ -6416,6 +6437,7 @@
         hiddenBySetting: 0,
         hiddenByThreshold: 0,
         hiddenBySmartLimit: 0,
+        hiddenByFrameBudget: 0,
         primaryLabels: 0,
         visiblePlayerCells: 0,
       },
@@ -6508,6 +6530,12 @@
         return null;
       }
 
+      const primary = isPrimaryLabel(safeMass, safeRawSize, safeRenderSize, totalMass);
+      if (shouldSkipLabelForFrameBudget(safeMass, primary, isOwnCell, isFriendCell)) {
+        state.counters.hiddenByFrameBudget += 1;
+        return null;
+      }
+
       const now = Date.now();
       sweepLabelCache(now);
       const textEntry = readMassText(cellId, safeMass, now);
@@ -6518,7 +6546,6 @@
       const fitScale = Number(explicitFitScale) > 0
         ? Number(explicitFitScale)
         : getFitScale(textEntry.text, safeName, nameScale, safeRenderSize);
-      const primary = isPrimaryLabel(safeMass, safeRawSize, safeRenderSize, totalMass);
       let scale = clampNumber(fitScale * settings.textScale, 0.001, 1.4, settings.textScale);
 
       if (primary) {
@@ -6570,22 +6597,57 @@
         own: Boolean(isOwnCell),
         friend: Boolean(isFriendCell),
       });
+      visiblePlayersSnapshotAt = 0;
       state.counters.visiblePlayerCells += 1;
-      pruneVisiblePlayers(now);
+      if (now - lastVisiblePlayerPrune >= VISIBLE_PLAYER_PRUNE_INTERVAL_MS || visiblePlayers.size > VISIBLE_PLAYER_MAX_ENTRIES) {
+        pruneVisiblePlayers(now);
+      }
     }
 
     function pruneVisiblePlayers(now = Date.now()) {
+      let changed = false;
       for (const [key, player] of visiblePlayers) {
         if (now - player.at > VISIBLE_PLAYER_MAX_AGE_MS) {
           visiblePlayers.delete(key);
+          changed = true;
         }
+      }
+
+      if (visiblePlayers.size > VISIBLE_PLAYER_MAX_ENTRIES) {
+        const removable = [...visiblePlayers.entries()]
+          .filter(([, player]) => !player.own)
+          .sort(([, left], [, right]) => {
+            const massDiff = (Number(left.mass) || 0) - (Number(right.mass) || 0);
+            return massDiff || (Number(left.at) || 0) - (Number(right.at) || 0);
+          });
+
+        for (const [key] of removable) {
+          if (visiblePlayers.size <= VISIBLE_PLAYER_MAX_ENTRIES) {
+            break;
+          }
+          visiblePlayers.delete(key);
+          changed = true;
+        }
+      }
+
+      lastVisiblePlayerPrune = now;
+      if (changed) {
+        visiblePlayersSnapshotAt = 0;
+        radarGroupSnapshotAt = 0;
       }
     }
 
     function getVisiblePlayers() {
-      pruneVisiblePlayers();
-      return [...visiblePlayers.values()]
+      const now = Date.now();
+      pruneVisiblePlayers(now);
+      if (visiblePlayersSnapshotAt && now - visiblePlayersSnapshotAt <= VISIBLE_PLAYER_SORT_CACHE_MS) {
+        return visiblePlayersSnapshot.slice();
+      }
+
+      visiblePlayersSnapshot = [...visiblePlayers.values()]
         .sort((left, right) => right.mass - left.mass || String(left.name).localeCompare(String(right.name)));
+      visiblePlayersSnapshotAt = now;
+      return visiblePlayersSnapshot.slice();
     }
 
     function setPlayerArrowsEnabled(enabled = true) {
@@ -6670,6 +6732,38 @@
         return 40;
       }
       return 0;
+    }
+
+    function shouldSkipLabelForFrameBudget(mass, primary, isOwnCell, isFriendCell) {
+      if (!settings.smartRendering) {
+        return false;
+      }
+
+      const now = getPerfNow();
+      if (!labelBudget.windowStart || now - labelBudget.windowStart > LABEL_BUDGET_WINDOW_MS) {
+        labelBudget.windowStart = now;
+        labelBudget.calls = 0;
+        labelBudget.smallLabels = 0;
+        labelBudget.protectedLabels = 0;
+      }
+
+      labelBudget.calls += 1;
+      const safeMass = Number(mass) || 0;
+      const protectedLabel = primary || isOwnCell || isFriendCell;
+
+      if (protectedLabel) {
+        labelBudget.protectedLabels += 1;
+        return labelBudget.protectedLabels > LABEL_BUDGET_MAX_PROTECTED_LABELS
+          && safeMass < LABEL_BUDGET_PROTECTED_SMALL_MASS;
+      }
+
+      if (safeMass >= LABEL_BUDGET_SMALL_MASS) {
+        return false;
+      }
+
+      labelBudget.smallLabels += 1;
+      return labelBudget.calls > LABEL_BUDGET_MAX_CALLS
+        || labelBudget.smallLabels > LABEL_BUDGET_MAX_SMALL_LABELS;
     }
 
     function getFitScale(text, name, nameScale, renderSize) {
@@ -6798,9 +6892,9 @@
       context.clearRect(0, 0, rect.width, rect.height);
 
       const now = Date.now();
-      const freshPlayers = getVisiblePlayers()
-        .filter((player) => player.screenAt && now - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
-      const allPlayers = groupRadarPlayers(freshPlayers);
+      const radarPlayers = getRadarPlayers(now);
+      const freshPlayers = radarPlayers.freshPlayers;
+      const allPlayers = radarPlayers.groupedPlayers;
       const anchor = getRadarAnchor(freshPlayers, allPlayers, rect);
       const anchorName = normalizeRadarAnchorName(anchor.name);
       const players = allPlayers
@@ -6826,6 +6920,7 @@
         anchor,
         lockedAnchorName: settings.radarAnchorName,
         players: players.length,
+        sourceCells: freshPlayers.length,
       };
 
       if (!doc.getElementById?.(PLAYER_ARROW_CANVAS_ID)) {
@@ -6898,6 +6993,19 @@
         .slice()
         .sort((left, right) => (Number(right.mass) || 0) - (Number(left.mass) || 0))[0];
       return biggest ? [biggest] : [];
+    }
+
+    function getRadarPlayers(now = Date.now()) {
+      if (radarGroupSnapshot && now - radarGroupSnapshotAt <= RADAR_GROUP_CACHE_MS) {
+        return radarGroupSnapshot;
+      }
+
+      const freshPlayers = getVisiblePlayers()
+        .filter((player) => player.screenAt && now - player.screenAt <= RADAR_PLAYER_MAX_AGE_MS);
+      const groupedPlayers = groupRadarPlayers(freshPlayers);
+      radarGroupSnapshot = { freshPlayers, groupedPlayers };
+      radarGroupSnapshotAt = now;
+      return radarGroupSnapshot;
     }
 
     function groupRadarPlayers(players) {
@@ -7512,6 +7620,17 @@
           lastPatchResult: state.lastPatchResult,
         },
         samples: state.samples.slice(),
+        performance: {
+          visiblePlayerCells: visiblePlayers.size,
+          labelBudget: {
+            calls: labelBudget.calls,
+            smallLabels: labelBudget.smallLabels,
+            protectedLabels: labelBudget.protectedLabels,
+            windowAgeMs: roundNumber(getPerfNow() - labelBudget.windowStart),
+          },
+          visiblePlayerCacheAgeMs: visiblePlayersSnapshotAt ? Date.now() - visiblePlayersSnapshotAt : null,
+          radarCacheAgeMs: radarGroupSnapshotAt ? Date.now() - radarGroupSnapshotAt : null,
+        },
         visiblePlayers: getVisiblePlayers(),
         lastLabel: state.lastLabel,
         lastDrawCapture: state.lastDrawCapture,
@@ -7603,6 +7722,11 @@
       }
       const number = Number(value);
       return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+    }
+
+    function getPerfNow() {
+      const now = win.performance?.now?.();
+      return Number.isFinite(Number(now)) ? Number(now) : Date.now();
     }
 
     function rememberError(message) {
