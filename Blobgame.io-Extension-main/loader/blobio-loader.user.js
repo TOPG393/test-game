@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blobio Web Script Loader
 // @namespace    https://github.com/TOPG393/test-game
-// @version      0.1.106
+// @version      0.1.107
 // @description  Loads the Blobio modular extension bundle from GitHub.
 // @match        *://blobgame.io/*
 // @match        *://www.blobgame.io/*
@@ -30,7 +30,7 @@
   'use strict';
 
   const LOG_PREFIX = '[Blobio]';
-  const VERSION = '0.1.104';
+  const VERSION = '0.1.105';
   const CUSTOM_CLIENT_HOST = 'custom.client.blobgame.io';
   const CAPTCHA_LOGO_HIDDEN_KEY = 'blobio.chat.hideCaptchaLogo';
   const RECAPTCHA_FRAME_HOSTS = new Set(['www.google.com', 'www.recaptcha.net']);
@@ -5832,10 +5832,18 @@
     function normalizeAssets(assets) {
       const source = assets && typeof assets === 'object' ? assets : {};
       const normalized = {};
-      for (const key of ['cool', 'nice', 'hi', 'yo', 'thx', 'why', 'pop']) {
-        normalized[key] = String(source[key] || '');
+      for (const [rawKey, rawUrl] of Object.entries(source)) {
+        const key = normalizeAssetKey(rawKey);
+        if (key) {
+          normalized[key] = String(rawUrl || '');
+        }
       }
       return normalized;
+    }
+
+    function normalizeAssetKey(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return /^[a-z0-9][a-z0-9-]{0,48}$/.test(key) ? key : '';
     }
 
     function refresh(nextConfig = {}) {
@@ -5893,7 +5901,10 @@
 
     function normalizeEmoteId(value) {
       const id = String(value || '').trim().toLowerCase();
-      return ['cool', 'nice', 'hi', 'yo', 'thx', 'why', 'pop', 'wink-pop'].includes(id) ? id : '';
+      if (id === 'wink-pop') {
+        return id;
+      }
+      return state.assets[normalizeAssetKey(id)] ? id : '';
     }
 
     function assetKeyForEmote(emoteId) {

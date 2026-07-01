@@ -2,9 +2,13 @@ import { EMOTE_SKIN_CSS, EMOTE_SKIN_STYLE_ID } from '../css/EmoteSkinStyles.js';
 import { createBlobioStorage } from '../storage/BlobioStorage.js';
 import {
   EMOTE_SKIN_EMOJIS,
-  EMOTE_SKIN_TRIGGERS,
   findEmoteTrigger,
+  getEmoteSkinTriggers,
   isEmoteSkinEnabled,
+  normalizeCustomEmoteTrigger,
+  normalizeCustomEmoteUrl,
+  readCustomEmotes,
+  saveCustomEmotes,
   setEmoteSkinEnabled,
 } from './EmoteSkinSettings.js';
 
@@ -25,6 +29,11 @@ export class EmoteSkinFeature {
     this.styleNode = null;
     this.button = null;
     this.panel = null;
+    this.assetBar = null;
+    this.customList = null;
+    this.customUrlInput = null;
+    this.customTriggerInput = null;
+    this.customError = null;
     this.input = null;
     this.pageObserver = null;
     this.chatObserver = null;
@@ -107,6 +116,7 @@ export class EmoteSkinFeature {
     panel.append(
       this.createSkinToggle(),
       this.createAssetBar(),
+      this.createCustomEmoteEditor(),
       this.createEmojiBar(),
     );
 
@@ -114,6 +124,8 @@ export class EmoteSkinFeature {
     this.button = button;
     this.panel = panel;
     this.syncToggle();
+    this.renderAssetButtons();
+    this.renderCustomEmoteList();
   }
 
   createSkinToggle() {
@@ -140,9 +152,20 @@ export class EmoteSkinFeature {
   createAssetBar() {
     const bar = this.document.createElement('div');
     bar.classList.add('blobio-emote-skin-assets');
+    this.assetBar = bar;
+    return bar;
+  }
 
-    for (const trigger of EMOTE_SKIN_TRIGGERS) {
-      const url = this.assets[trigger.assetKey];
+  renderAssetButtons() {
+    const bar = this.assetBar || this.panel?.querySelector?.('.blobio-emote-skin-assets');
+    if (!bar) {
+      return;
+    }
+
+    bar.textContent = '';
+    const assets = this.getAllAssets();
+    for (const trigger of getEmoteSkinTriggers(this.getCustomEmotes())) {
+      const url = assets[trigger.assetKey];
       if (!url) {
         continue;
       }
@@ -164,8 +187,52 @@ export class EmoteSkinFeature {
       });
       bar.appendChild(button);
     }
+  }
 
-    return bar;
+  createCustomEmoteEditor() {
+    const editor = this.document.createElement('div');
+    editor.classList.add('blobio-emote-skin-custom');
+
+    const controls = this.document.createElement('div');
+    controls.classList.add('blobio-emote-skin-custom-controls');
+
+    const trigger = this.document.createElement('input');
+    trigger.type = 'text';
+    trigger.maxLength = 18;
+    trigger.placeholder = ':myemote:';
+    trigger.setAttribute('aria-label', 'Custom emote trigger');
+    trigger.classList.add('blobio-emote-skin-custom-trigger');
+    this.customTriggerInput = trigger;
+
+    const url = this.document.createElement('input');
+    url.type = 'url';
+    url.placeholder = 'https://i.imgur.com/emote.png';
+    url.setAttribute('aria-label', 'Custom emote image URL');
+    url.classList.add('blobio-emote-skin-custom-url');
+    this.customUrlInput = url;
+
+    const add = this.document.createElement('button');
+    add.type = 'button';
+    add.classList.add('blobio-emote-skin-custom-add');
+    add.textContent = '+';
+    add.setAttribute('aria-label', 'Add custom skin emote');
+    add.addEventListener('click', (event) => {
+      event.preventDefault?.();
+      this.addCustomEmoteFromInputs();
+    });
+
+    controls.append(trigger, url, add);
+
+    const error = this.document.createElement('div');
+    error.classList.add('blobio-emote-skin-custom-error');
+    this.customError = error;
+
+    const list = this.document.createElement('div');
+    list.classList.add('blobio-emote-skin-custom-list');
+    this.customList = list;
+
+    editor.append(controls, error, list);
+    return editor;
   }
 
   createEmojiBar() {
@@ -185,6 +252,101 @@ export class EmoteSkinFeature {
     }
 
     return bar;
+  }
+
+  getCustomEmotes() {
+    return readCustomEmotes(this.storage);
+  }
+
+  getAllAssets() {
+    const assets = { ...this.assets };
+    for (const emote of this.getCustomEmotes()) {
+      assets[emote.assetKey] = emote.url;
+    }
+    return assets;
+  }
+
+  addCustomEmoteFromInputs() {
+    const trigger = normalizeCustomEmoteTrigger(this.customTriggerInput?.value);
+    const url = normalizeCustomEmoteUrl(this.customUrlInput?.value);
+    if (!trigger || !url) {
+      this.setCustomError('Use a trigger and direct image URL.');
+      return false;
+    }
+
+    const customEmotes = this.getCustomEmotes();
+    const next = customEmotes
+      .filter((emote) => String(emote.emoji).toLowerCase() !== trigger.toLowerCase())
+      .concat({ trigger, label: trigger, url });
+    saveCustomEmotes(this.storage, next);
+    if (this.customTriggerInput) {
+      this.customTriggerInput.value = '';
+    }
+    if (this.customUrlInput) {
+      this.customUrlInput.value = '';
+    }
+    this.setCustomError('');
+    this.renderAssetButtons();
+    this.renderCustomEmoteList();
+    this.refreshRuntimeAssets();
+    this.schedulePosition();
+    return true;
+  }
+
+  removeCustomEmote(trigger) {
+    const normalized = normalizeCustomEmoteTrigger(trigger).toLowerCase();
+    const next = this.getCustomEmotes().filter((emote) => String(emote.emoji).toLowerCase() !== normalized);
+    saveCustomEmotes(this.storage, next);
+    this.renderAssetButtons();
+    this.renderCustomEmoteList();
+    this.refreshRuntimeAssets();
+    this.schedulePosition();
+  }
+
+  renderCustomEmoteList() {
+    const list = this.customList || this.panel?.querySelector?.('.blobio-emote-skin-custom-list');
+    if (!list) {
+      return;
+    }
+
+    list.textContent = '';
+    const customEmotes = this.getCustomEmotes();
+    if (!customEmotes.length) {
+      list.classList.add('is-empty');
+      return;
+    }
+
+    list.classList.remove('is-empty');
+    for (const emote of customEmotes) {
+      const chip = this.document.createElement('button');
+      chip.type = 'button';
+      chip.classList.add('blobio-emote-skin-custom-chip');
+      chip.title = 'Remove custom emote';
+      chip.dataset.trigger = emote.emoji;
+
+      const image = this.document.createElement('img');
+      image.src = emote.url;
+      image.alt = emote.emoji;
+
+      const text = this.document.createElement('span');
+      text.textContent = emote.emoji;
+
+      chip.append(image, text);
+      chip.addEventListener('click', (event) => {
+        event.preventDefault?.();
+        this.removeCustomEmote(emote.emoji);
+      });
+      list.appendChild(chip);
+    }
+  }
+
+  setCustomError(message) {
+    if (!this.customError) {
+      return;
+    }
+
+    this.customError.textContent = String(message || '');
+    this.customError.classList.toggle('is-visible', Boolean(message));
   }
 
   syncInput() {
@@ -291,6 +453,11 @@ export class EmoteSkinFeature {
       checkbox.checked = enabled;
     }
     this.panel?.classList.toggle('is-skin-enabled', enabled);
+    this.renderAssetButtons();
+    this.renderCustomEmoteList();
+    if (enabled) {
+      this.refreshRuntimeAssets();
+    }
   }
 
   insertEmoji(emoji) {
@@ -370,7 +537,7 @@ export class EmoteSkinFeature {
     }
 
     const text = String(this.input?.value || '');
-    const trigger = findEmoteTrigger(text);
+    const trigger = findEmoteTrigger(text, this.getCustomEmotes());
     if (!trigger) {
       return;
     }
@@ -408,6 +575,7 @@ export class EmoteSkinFeature {
 
   triggerRuntimeEmote(event) {
     let triggered = false;
+    this.refreshRuntimeAssets();
     const targets = this.getRuntimeTargets();
     this.debug.lastRuntimeTargets = targets.map((target) => ({
       hasTrigger: typeof target.__BlobioSkinEmoteTrigger === 'function',
@@ -454,6 +622,15 @@ export class EmoteSkinFeature {
     return targets;
   }
 
+  refreshRuntimeAssets() {
+    const assets = this.getAllAssets();
+    for (const target of this.getRuntimeTargets()) {
+      try {
+        target.__blobioEmoteSkinRefresh?.({ assets });
+      } catch {}
+    }
+  }
+
   installDebugApi() {
     const report = () => {
       const snapshot = this.getDebugReport();
@@ -486,7 +663,7 @@ export class EmoteSkinFeature {
     }
 
     return {
-      version: '0.1.1',
+      version: '0.1.2',
       url: this.document.defaultView?.location?.href || globalThis.location?.href || '',
       uptimeMs: Date.now() - this.debug.startedAt,
       enabled: isEmoteSkinEnabled(this.storage),
@@ -511,6 +688,11 @@ export class EmoteSkinFeature {
         runtimeTriggerSuccess: this.debug.runtimeTriggerSuccess,
         runtimeTriggerMisses: this.debug.runtimeTriggerMisses,
       },
+      customEmotes: this.getCustomEmotes().map((emote) => ({
+        id: emote.id,
+        trigger: emote.emoji,
+        hasUrl: Boolean(emote.url),
+      })),
       lastSend: this.debug.lastSend,
       lastTrigger: this.debug.lastTrigger,
       errors: this.debug.errors.slice(-8),
@@ -561,7 +743,7 @@ export class EmoteSkinFeature {
       return;
     }
 
-    const trigger = findEmoteTrigger(parsed.text);
+    const trigger = findEmoteTrigger(parsed.text, this.getCustomEmotes());
     if (!trigger) {
       return;
     }

@@ -3012,13 +3012,123 @@
 }
 
 .blobio-emote-skin-panel.is-skin-enabled .blobio-emote-skin-assets {
-  max-height: 96px;
+  max-height: 124px;
   margin-bottom: 9px;
   padding-bottom: 9px;
   border-bottom-color: rgba(142, 255, 174, 0.28);
   opacity: 1;
+  overflow-y: auto;
   pointer-events: auto;
   transform: translateY(0);
+}
+
+.blobio-emote-skin-custom {
+  display: none;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(142, 255, 174, 0.2);
+}
+
+.blobio-emote-skin-panel.is-skin-enabled .blobio-emote-skin-custom {
+  display: block;
+}
+
+.blobio-emote-skin-custom-controls {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 30px;
+  gap: 6px;
+  align-items: center;
+}
+
+.blobio-emote-skin-custom-trigger,
+.blobio-emote-skin-custom-url {
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(142, 255, 174, 0.3);
+  border-radius: 7px;
+  background: rgba(7, 35, 19, 0.76);
+  color: #f3fff5;
+  font: 700 11px Arial, sans-serif;
+  outline: none;
+}
+
+.blobio-emote-skin-custom-trigger:focus,
+.blobio-emote-skin-custom-url:focus {
+  border-color: rgba(204, 255, 216, 0.8);
+  box-shadow: 0 0 12px rgba(73, 255, 130, 0.26);
+}
+
+.blobio-emote-skin-custom-add {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(142, 255, 174, 0.46);
+  border-radius: 7px;
+  background: rgba(19, 80, 38, 0.88);
+  color: #ffffff;
+  cursor: pointer;
+  font: 900 17px/1 Arial, sans-serif;
+}
+
+.blobio-emote-skin-custom-add:hover {
+  border-color: rgba(224, 255, 232, 0.94);
+  background: rgba(28, 108, 53, 0.92);
+}
+
+.blobio-emote-skin-custom-error {
+  display: none;
+  margin-top: 5px;
+  color: #ffb7b7;
+  font: 700 11px Arial, sans-serif;
+}
+
+.blobio-emote-skin-custom-error.is-visible {
+  display: block;
+}
+
+.blobio-emote-skin-custom-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.blobio-emote-skin-custom-list.is-empty {
+  display: none;
+}
+
+.blobio-emote-skin-custom-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 92px;
+  height: 28px;
+  padding: 0 7px 0 3px;
+  border: 1px solid rgba(142, 255, 174, 0.26);
+  border-radius: 7px;
+  background: rgba(7, 35, 19, 0.68);
+  color: #ffffff;
+  cursor: pointer;
+  font: 700 10px Arial, sans-serif;
+}
+
+.blobio-emote-skin-custom-chip:hover {
+  border-color: rgba(255, 150, 150, 0.78);
+  background: rgba(72, 24, 24, 0.76);
+}
+
+.blobio-emote-skin-custom-chip img {
+  width: 21px;
+  height: 21px;
+  object-fit: contain;
+}
+
+.blobio-emote-skin-custom-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .blobio-emote-skin-emojis {
@@ -3081,6 +3191,7 @@
 
   // src/emotes/EmoteSkinSettings.js
   var EMOTE_SKIN_ENABLED_KEY = "blobio.emoteSkin.enabled";
+  var EMOTE_SKIN_CUSTOM_KEY = "blobio.emoteSkin.customEmotes";
   var EMOTE_SKIN_EMOJIS = [
     "\u{1F600}",
     "\u{1F603}",
@@ -3137,6 +3248,78 @@
     { id: "pop", emoji: "\u26BD\uFE0F", aliases: ["\u26BD\uFE0F", "\u26BD"], assetKey: "pop", label: "Pop" },
     { id: "wink-pop", emoji: "\u{1F609}", aliases: ["\u{1F609}"], assetKey: "pop", label: "Wink pop" }
   ];
+  var CUSTOM_IMAGE_URL_MATCH = /^https?:\/\/.+\.(?:png|jpe?g|webp|gif)(?:[?#].*)?$/i;
+  function normalizeCustomEmoteTrigger(value) {
+    const trigger = String(value || "").replace(/\s+/g, "").trim();
+    return trigger.slice(0, 18);
+  }
+  function normalizeCustomEmoteUrl(value) {
+    const url = String(value || "").trim();
+    if (!CUSTOM_IMAGE_URL_MATCH.test(url)) {
+      return "";
+    }
+    try {
+      return new URL(url).toString();
+    } catch {
+      return "";
+    }
+  }
+  function customEmoteId(trigger, index) {
+    const slug = String(trigger || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 28);
+    return `custom-${slug || index}`;
+  }
+  function parseCustomEmotes(value) {
+    let entries = [];
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      entries = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      entries = [];
+    }
+    const usedTriggers = /* @__PURE__ */ new Set();
+    const emotes = [];
+    for (const entry of entries) {
+      const trigger = normalizeCustomEmoteTrigger(entry?.trigger ?? entry?.emoji);
+      const url = normalizeCustomEmoteUrl(entry?.url);
+      if (!trigger || !url || usedTriggers.has(trigger.toLowerCase())) {
+        continue;
+      }
+      usedTriggers.add(trigger.toLowerCase());
+      const id = customEmoteId(trigger, emotes.length + 1);
+      emotes.push({
+        id,
+        emoji: trigger,
+        aliases: [trigger],
+        assetKey: id,
+        label: String(entry?.label || trigger).trim().slice(0, 24) || trigger,
+        url,
+        custom: true
+      });
+    }
+    return emotes.slice(0, 18);
+  }
+  function readCustomEmotes(storage) {
+    try {
+      return parseCustomEmotes(storage?.getItem?.(EMOTE_SKIN_CUSTOM_KEY));
+    } catch {
+      return [];
+    }
+  }
+  function saveCustomEmotes(storage, emotes) {
+    const clean = parseCustomEmotes(emotes);
+    try {
+      storage?.setItem?.(EMOTE_SKIN_CUSTOM_KEY, JSON.stringify(clean.map((emote) => ({
+        trigger: emote.emoji,
+        label: emote.label,
+        url: emote.url
+      }))));
+    } catch {
+    }
+    return clean;
+  }
+  function getEmoteSkinTriggers(customEmotes = []) {
+    return EMOTE_SKIN_TRIGGERS.concat(parseCustomEmotes(customEmotes));
+  }
   function isEmoteSkinEnabled(storage) {
     try {
       const value = storage?.getItem?.(EMOTE_SKIN_ENABLED_KEY);
@@ -3152,9 +3335,9 @@
     }
     return Boolean(enabled);
   }
-  function findEmoteTrigger(text) {
+  function findEmoteTrigger(text, customEmotes = []) {
     const value = String(text || "");
-    return EMOTE_SKIN_TRIGGERS.find((trigger) => trigger.aliases.some((emoji) => value.includes(emoji))) || null;
+    return getEmoteSkinTriggers(customEmotes).find((trigger) => trigger.aliases.some((emoji) => value.includes(emoji))) || null;
   }
 
   // src/emotes/EmoteSkinFeature.js
@@ -3174,6 +3357,11 @@
       this.styleNode = null;
       this.button = null;
       this.panel = null;
+      this.assetBar = null;
+      this.customList = null;
+      this.customUrlInput = null;
+      this.customTriggerInput = null;
+      this.customError = null;
       this.input = null;
       this.pageObserver = null;
       this.chatObserver = null;
@@ -3249,12 +3437,15 @@
       panel.append(
         this.createSkinToggle(),
         this.createAssetBar(),
+        this.createCustomEmoteEditor(),
         this.createEmojiBar()
       );
       (this.document.body || this.document.documentElement).append(button, panel);
       this.button = button;
       this.panel = panel;
       this.syncToggle();
+      this.renderAssetButtons();
+      this.renderCustomEmoteList();
     }
     createSkinToggle() {
       const label = this.document.createElement("label");
@@ -3276,8 +3467,18 @@
     createAssetBar() {
       const bar = this.document.createElement("div");
       bar.classList.add("blobio-emote-skin-assets");
-      for (const trigger of EMOTE_SKIN_TRIGGERS) {
-        const url = this.assets[trigger.assetKey];
+      this.assetBar = bar;
+      return bar;
+    }
+    renderAssetButtons() {
+      const bar = this.assetBar || this.panel?.querySelector?.(".blobio-emote-skin-assets");
+      if (!bar) {
+        return;
+      }
+      bar.textContent = "";
+      const assets = this.getAllAssets();
+      for (const trigger of getEmoteSkinTriggers(this.getCustomEmotes())) {
+        const url = assets[trigger.assetKey];
         if (!url) {
           continue;
         }
@@ -3296,7 +3497,43 @@
         });
         bar.appendChild(button);
       }
-      return bar;
+    }
+    createCustomEmoteEditor() {
+      const editor = this.document.createElement("div");
+      editor.classList.add("blobio-emote-skin-custom");
+      const controls = this.document.createElement("div");
+      controls.classList.add("blobio-emote-skin-custom-controls");
+      const trigger = this.document.createElement("input");
+      trigger.type = "text";
+      trigger.maxLength = 18;
+      trigger.placeholder = ":myemote:";
+      trigger.setAttribute("aria-label", "Custom emote trigger");
+      trigger.classList.add("blobio-emote-skin-custom-trigger");
+      this.customTriggerInput = trigger;
+      const url = this.document.createElement("input");
+      url.type = "url";
+      url.placeholder = "https://i.imgur.com/emote.png";
+      url.setAttribute("aria-label", "Custom emote image URL");
+      url.classList.add("blobio-emote-skin-custom-url");
+      this.customUrlInput = url;
+      const add = this.document.createElement("button");
+      add.type = "button";
+      add.classList.add("blobio-emote-skin-custom-add");
+      add.textContent = "+";
+      add.setAttribute("aria-label", "Add custom skin emote");
+      add.addEventListener("click", (event) => {
+        event.preventDefault?.();
+        this.addCustomEmoteFromInputs();
+      });
+      controls.append(trigger, url, add);
+      const error = this.document.createElement("div");
+      error.classList.add("blobio-emote-skin-custom-error");
+      this.customError = error;
+      const list = this.document.createElement("div");
+      list.classList.add("blobio-emote-skin-custom-list");
+      this.customList = list;
+      editor.append(controls, error, list);
+      return editor;
     }
     createEmojiBar() {
       const bar = this.document.createElement("div");
@@ -3313,6 +3550,86 @@
         bar.appendChild(button);
       }
       return bar;
+    }
+    getCustomEmotes() {
+      return readCustomEmotes(this.storage);
+    }
+    getAllAssets() {
+      const assets = { ...this.assets };
+      for (const emote of this.getCustomEmotes()) {
+        assets[emote.assetKey] = emote.url;
+      }
+      return assets;
+    }
+    addCustomEmoteFromInputs() {
+      const trigger = normalizeCustomEmoteTrigger(this.customTriggerInput?.value);
+      const url = normalizeCustomEmoteUrl(this.customUrlInput?.value);
+      if (!trigger || !url) {
+        this.setCustomError("Use a trigger and direct image URL.");
+        return false;
+      }
+      const customEmotes = this.getCustomEmotes();
+      const next = customEmotes.filter((emote) => String(emote.emoji).toLowerCase() !== trigger.toLowerCase()).concat({ trigger, label: trigger, url });
+      saveCustomEmotes(this.storage, next);
+      if (this.customTriggerInput) {
+        this.customTriggerInput.value = "";
+      }
+      if (this.customUrlInput) {
+        this.customUrlInput.value = "";
+      }
+      this.setCustomError("");
+      this.renderAssetButtons();
+      this.renderCustomEmoteList();
+      this.refreshRuntimeAssets();
+      this.schedulePosition();
+      return true;
+    }
+    removeCustomEmote(trigger) {
+      const normalized = normalizeCustomEmoteTrigger(trigger).toLowerCase();
+      const next = this.getCustomEmotes().filter((emote) => String(emote.emoji).toLowerCase() !== normalized);
+      saveCustomEmotes(this.storage, next);
+      this.renderAssetButtons();
+      this.renderCustomEmoteList();
+      this.refreshRuntimeAssets();
+      this.schedulePosition();
+    }
+    renderCustomEmoteList() {
+      const list = this.customList || this.panel?.querySelector?.(".blobio-emote-skin-custom-list");
+      if (!list) {
+        return;
+      }
+      list.textContent = "";
+      const customEmotes = this.getCustomEmotes();
+      if (!customEmotes.length) {
+        list.classList.add("is-empty");
+        return;
+      }
+      list.classList.remove("is-empty");
+      for (const emote of customEmotes) {
+        const chip = this.document.createElement("button");
+        chip.type = "button";
+        chip.classList.add("blobio-emote-skin-custom-chip");
+        chip.title = "Remove custom emote";
+        chip.dataset.trigger = emote.emoji;
+        const image = this.document.createElement("img");
+        image.src = emote.url;
+        image.alt = emote.emoji;
+        const text = this.document.createElement("span");
+        text.textContent = emote.emoji;
+        chip.append(image, text);
+        chip.addEventListener("click", (event) => {
+          event.preventDefault?.();
+          this.removeCustomEmote(emote.emoji);
+        });
+        list.appendChild(chip);
+      }
+    }
+    setCustomError(message) {
+      if (!this.customError) {
+        return;
+      }
+      this.customError.textContent = String(message || "");
+      this.customError.classList.toggle("is-visible", Boolean(message));
     }
     syncInput() {
       const input = this.document.querySelector?.(INPUT_SELECTOR);
@@ -3404,6 +3721,11 @@
         checkbox.checked = enabled;
       }
       this.panel?.classList.toggle("is-skin-enabled", enabled);
+      this.renderAssetButtons();
+      this.renderCustomEmoteList();
+      if (enabled) {
+        this.refreshRuntimeAssets();
+      }
     }
     insertEmoji(emoji) {
       const input = this.input || this.document.querySelector?.(INPUT_SELECTOR);
@@ -3473,7 +3795,7 @@
         return;
       }
       const text = String(this.input?.value || "");
-      const trigger = findEmoteTrigger(text);
+      const trigger = findEmoteTrigger(text, this.getCustomEmotes());
       if (!trigger) {
         return;
       }
@@ -3502,6 +3824,7 @@
     }
     triggerRuntimeEmote(event) {
       let triggered = false;
+      this.refreshRuntimeAssets();
       const targets = this.getRuntimeTargets();
       this.debug.lastRuntimeTargets = targets.map((target) => ({
         hasTrigger: typeof target.__BlobioSkinEmoteTrigger === "function",
@@ -3541,6 +3864,15 @@
       addTarget(globalThis);
       return targets;
     }
+    refreshRuntimeAssets() {
+      const assets = this.getAllAssets();
+      for (const target of this.getRuntimeTargets()) {
+        try {
+          target.__blobioEmoteSkinRefresh?.({ assets });
+        } catch {
+        }
+      }
+    }
     installDebugApi() {
       const report = () => {
         const snapshot = this.getDebugReport();
@@ -3572,7 +3904,7 @@
         }
       }
       return {
-        version: "0.1.1",
+        version: "0.1.2",
         url: this.document.defaultView?.location?.href || globalThis.location?.href || "",
         uptimeMs: Date.now() - this.debug.startedAt,
         enabled: isEmoteSkinEnabled(this.storage),
@@ -3597,6 +3929,11 @@
           runtimeTriggerSuccess: this.debug.runtimeTriggerSuccess,
           runtimeTriggerMisses: this.debug.runtimeTriggerMisses
         },
+        customEmotes: this.getCustomEmotes().map((emote) => ({
+          id: emote.id,
+          trigger: emote.emoji,
+          hasUrl: Boolean(emote.url)
+        })),
         lastSend: this.debug.lastSend,
         lastTrigger: this.debug.lastTrigger,
         errors: this.debug.errors.slice(-8)
@@ -3640,7 +3977,7 @@
       if (!parsed.text || !parsed.name) {
         return;
       }
-      const trigger = findEmoteTrigger(parsed.text);
+      const trigger = findEmoteTrigger(parsed.text, this.getCustomEmotes());
       if (!trigger) {
         return;
       }
@@ -3888,10 +4225,17 @@
     function normalizeAssets(assets) {
       const source = assets && typeof assets === "object" ? assets : {};
       const normalized = {};
-      for (const key of ["cool", "nice", "hi", "yo", "thx", "why", "pop"]) {
-        normalized[key] = String(source[key] || "");
+      for (const [rawKey, rawUrl] of Object.entries(source)) {
+        const key = normalizeAssetKey(rawKey);
+        if (key) {
+          normalized[key] = String(rawUrl || "");
+        }
       }
       return normalized;
+    }
+    function normalizeAssetKey(value) {
+      const key = String(value || "").trim().toLowerCase();
+      return /^[a-z0-9][a-z0-9-]{0,48}$/.test(key) ? key : "";
     }
     function refresh(nextConfig = {}) {
       state.assets = normalizeAssets(nextConfig.assets || state.assets);
@@ -3942,7 +4286,10 @@
     }
     function normalizeEmoteId(value) {
       const id = String(value || "").trim().toLowerCase();
-      return ["cool", "nice", "hi", "yo", "thx", "why", "pop", "wink-pop"].includes(id) ? id : "";
+      if (id === "wink-pop") {
+        return id;
+      }
+      return state.assets[normalizeAssetKey(id)] ? id : "";
     }
     function assetKeyForEmote(emoteId) {
       return emoteId === "wink-pop" ? "pop" : emoteId;
@@ -16403,7 +16750,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.104";
+  var DEFAULT_EXTENSION_VERSION = "0.1.105";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -22027,7 +22374,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.104";
+  var EXTENSION_VERSION = "0.1.105";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,

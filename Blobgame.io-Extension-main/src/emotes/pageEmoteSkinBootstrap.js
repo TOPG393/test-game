@@ -66,10 +66,18 @@ export function pageEmoteSkinBootstrap(initialConfig = {}, pageWindow = globalTh
   function normalizeAssets(assets) {
     const source = assets && typeof assets === 'object' ? assets : {};
     const normalized = {};
-    for (const key of ['cool', 'nice', 'hi', 'yo', 'thx', 'why', 'pop']) {
-      normalized[key] = String(source[key] || '');
+    for (const [rawKey, rawUrl] of Object.entries(source)) {
+      const key = normalizeAssetKey(rawKey);
+      if (key) {
+        normalized[key] = String(rawUrl || '');
+      }
     }
     return normalized;
+  }
+
+  function normalizeAssetKey(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return /^[a-z0-9][a-z0-9-]{0,48}$/.test(key) ? key : '';
   }
 
   function refresh(nextConfig = {}) {
@@ -127,7 +135,10 @@ export function pageEmoteSkinBootstrap(initialConfig = {}, pageWindow = globalTh
 
   function normalizeEmoteId(value) {
     const id = String(value || '').trim().toLowerCase();
-    return ['cool', 'nice', 'hi', 'yo', 'thx', 'why', 'pop', 'wink-pop'].includes(id) ? id : '';
+    if (id === 'wink-pop') {
+      return id;
+    }
+    return state.assets[normalizeAssetKey(id)] ? id : '';
   }
 
   function assetKeyForEmote(emoteId) {
