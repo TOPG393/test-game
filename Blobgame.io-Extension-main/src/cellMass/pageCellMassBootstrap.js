@@ -10,7 +10,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     return true;
   }
 
-  const SCRIPT_VERSION = '0.1.25';
+  const SCRIPT_VERSION = '0.1.26';
   const CELL_MASS_SNAPSHOT_KEY = 'blobio.settings.cellMass.snapshot';
   const CELL_MASS_COOKIE_NAME = 'blobioCellMass';
   const STORAGE_BRIDGE_SOURCE = 'BlobioExtensionStorageBridge';
@@ -33,6 +33,8 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
   const LABEL_BUDGET_MAX_PROTECTED_LABELS = 64;
   const LABEL_BUDGET_SMALL_MASS = 1800;
   const LABEL_BUDGET_PROTECTED_SMALL_MASS = 3200;
+  const RADAR_ANCHOR_SMOOTHING = 0.22;
+  const RADAR_ANCHOR_SPLIT_SMOOTHING = 0.14;
   const PLAYER_ARROW_CANVAS_ID = 'blobio-visible-player-arrows';
   const PLAYER_ARROW_TOGGLE_ID = 'blobio-visible-player-toggle';
   const PLAYER_ANCHOR_TOGGLE_ID = 'blobio-visible-player-anchor';
@@ -45,6 +47,7 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
   let visiblePlayersSnapshotAt = 0;
   let radarGroupSnapshot = null;
   let radarGroupSnapshotAt = 0;
+  let smoothedRadarAnchor = null;
   const labelBudget = {
     windowStart: 0,
     calls: 0,
@@ -529,7 +532,8 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     const radarPlayers = getRadarPlayers(now);
     const freshPlayers = radarPlayers.freshPlayers;
     const allPlayers = radarPlayers.groupedPlayers;
-    const anchor = getRadarAnchor(freshPlayers, allPlayers, rect);
+    const rawAnchor = getRadarAnchor(freshPlayers, allPlayers, rect);
+    const anchor = smoothRadarAnchor(rawAnchor, now, rect);
     const anchorName = normalizeRadarAnchorName(anchor.name);
     const players = allPlayers
       .filter((player) => !player.own)
@@ -594,10 +598,12 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     let weightedWorldX = 0;
     let weightedWorldY = 0;
     let projectedWeight = 0;
+    let sourceCells = 0;
     let biggest = anchorCells[0] || null;
     for (const player of anchorCells) {
       const weight = Math.max(1, Number(player.mass) || 1);
       totalMass += weight;
+      sourceCells += Math.max(1, Number(player.splitCells) || 1);
       weightedX += Number(player.screenX) * weight;
       weightedY += Number(player.screenY) * weight;
       weightedWorldX += Number(player.x) * weight;
@@ -619,6 +625,65 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       anchor: anchorType,
       name: String(biggest?.name || ''),
       mass: Math.round(Number(biggest?.mass) || 0),
+      sourceCells,
+    };
+  }
+
+  function smoothRadarAnchor(anchor, now, rect) {
+    const key = `${anchor.anchor}:${normalizeRadarAnchorName(anchor.name)}`;
+    const anchorX = Number(anchor.x);
+    const anchorY = Number(anchor.y);
+    if (!Number.isFinite(anchorX) || !Number.isFinite(anchorY)) {
+      smoothedRadarAnchor = null;
+      return anchor;
+    }
+
+    const resetDistance = Math.max(220, Math.min(Number(rect?.width) || 0, Number(rect?.height) || 0) * 0.55);
+    const previous = smoothedRadarAnchor;
+    const previousIsValid = previous
+      && previous.key === key
+      && now - previous.at < 1000
+      && Number.isFinite(Number(previous.x))
+      && Number.isFinite(Number(previous.y));
+    const distance = previousIsValid ? Math.hypot(anchorX - previous.x, anchorY - previous.y) : Infinity;
+    if (!previousIsValid || distance > resetDistance) {
+      smoothedRadarAnchor = {
+        key,
+        at: now,
+        x: anchorX,
+        y: anchorY,
+        worldX: Number(anchor.worldX),
+        worldY: Number(anchor.worldY),
+      };
+      return anchor;
+    }
+
+    const smoothing = Number(anchor.sourceCells) > 8 ? RADAR_ANCHOR_SPLIT_SMOOTHING : RADAR_ANCHOR_SMOOTHING;
+    const nextX = lerpNumber(previous.x, anchorX, smoothing);
+    const nextY = lerpNumber(previous.y, anchorY, smoothing);
+    const nextWorldX = Number.isFinite(Number(anchor.worldX))
+      ? lerpNumber(previous.worldX, Number(anchor.worldX), smoothing)
+      : anchor.worldX;
+    const nextWorldY = Number.isFinite(Number(anchor.worldY))
+      ? lerpNumber(previous.worldY, Number(anchor.worldY), smoothing)
+      : anchor.worldY;
+
+    smoothedRadarAnchor = {
+      key,
+      at: now,
+      x: nextX,
+      y: nextY,
+      worldX: nextWorldX,
+      worldY: nextWorldY,
+    };
+
+    return {
+      ...anchor,
+      x: nextX,
+      y: nextY,
+      worldX: Number.isFinite(Number(nextWorldX)) ? roundNumber(nextWorldX) : anchor.worldX,
+      worldY: Number.isFinite(Number(nextWorldY)) ? roundNumber(nextWorldY) : anchor.worldY,
+      smoothed: true,
     };
   }
 
@@ -806,10 +871,28 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
       overlay.width = width;
       overlay.height = height;
     }
-    overlay.style.left = `${Math.round(rect.left)}px`;
-    overlay.style.top = `${Math.round(rect.top)}px`;
-    overlay.style.width = `${Math.round(rect.width)}px`;
-    overlay.style.height = `${Math.round(rect.height)}px`;
+
+    const nextLayout = {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+    const previousLayout = overlay.__blobioArrowLayout || {};
+    if (
+      previousLayout.left === nextLayout.left
+      && previousLayout.top === nextLayout.top
+      && previousLayout.width === nextLayout.width
+      && previousLayout.height === nextLayout.height
+    ) {
+      return;
+    }
+
+    overlay.__blobioArrowLayout = nextLayout;
+    overlay.style.left = `${nextLayout.left}px`;
+    overlay.style.top = `${nextLayout.top}px`;
+    overlay.style.width = `${nextLayout.width}px`;
+    overlay.style.height = `${nextLayout.height}px`;
   }
 
   function clearPlayerArrowOverlay() {
@@ -1356,6 +1439,18 @@ export function pageCellMassBootstrap(initialSettings = {}, pageWindow = globalT
     }
     const number = Number(value);
     return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+  }
+
+  function lerpNumber(from, to, amount) {
+    const start = Number(from);
+    const end = Number(to);
+    if (!Number.isFinite(end)) {
+      return to;
+    }
+    if (!Number.isFinite(start)) {
+      return end;
+    }
+    return start + (end - start) * amount;
   }
 
   function getPerfNow() {
