@@ -20,6 +20,7 @@ export const DEFAULT_CELL_MASS_SETTINGS = Object.freeze({
   nameGap: 1.2,
   updateDelayMs: 3000,
   playerArrows: false,
+  radarPlayerMode: 'all',
   radarAnchorName: 'topg',
 });
 
@@ -103,10 +104,18 @@ export function normalizeCellMassSettings(settings = {}) {
     playerArrows: source.playerArrows === undefined
       ? DEFAULT_CELL_MASS_SETTINGS.playerArrows
       : Boolean(source.playerArrows),
+    radarPlayerMode: source.radarPlayerMode === undefined
+      ? DEFAULT_CELL_MASS_SETTINGS.radarPlayerMode
+      : normalizeRadarPlayerMode(source.radarPlayerMode),
     radarAnchorName: source.radarAnchorName === undefined
       ? DEFAULT_CELL_MASS_SETTINGS.radarAnchorName
       : normalizeRadarAnchorName(source.radarAnchorName),
   };
+}
+
+function normalizeRadarPlayerMode(value) {
+  const mode = String(value || '').trim().toLowerCase();
+  return mode === 'friends' ? 'friends' : DEFAULT_CELL_MASS_SETTINGS.radarPlayerMode;
 }
 
 function normalizeRadarAnchorName(value) {

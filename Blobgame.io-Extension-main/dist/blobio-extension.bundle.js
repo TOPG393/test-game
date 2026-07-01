@@ -83,6 +83,7 @@
     nameGap: 1.2,
     updateDelayMs: 3e3,
     playerArrows: false,
+    radarPlayerMode: "all",
     radarAnchorName: "topg"
   });
   function readCellMassSettings(storage, document = globalThis.document) {
@@ -149,8 +150,13 @@
       nameGap: clampNumber(source.nameGap, 0.1, 3, preset.nameGap),
       updateDelayMs: Math.round(clampNumber(source.updateDelayMs, 0, 1e4, DEFAULT_CELL_MASS_SETTINGS.updateDelayMs)),
       playerArrows: source.playerArrows === void 0 ? DEFAULT_CELL_MASS_SETTINGS.playerArrows : Boolean(source.playerArrows),
+      radarPlayerMode: source.radarPlayerMode === void 0 ? DEFAULT_CELL_MASS_SETTINGS.radarPlayerMode : normalizeRadarPlayerMode(source.radarPlayerMode),
       radarAnchorName: source.radarAnchorName === void 0 ? DEFAULT_CELL_MASS_SETTINGS.radarAnchorName : normalizeRadarAnchorName(source.radarAnchorName)
     };
+  }
+  function normalizeRadarPlayerMode(value) {
+    const mode = String(value || "").trim().toLowerCase();
+    return mode === "friends" ? "friends" : DEFAULT_CELL_MASS_SETTINGS.radarPlayerMode;
   }
   function normalizeRadarAnchorName(value) {
     return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -197,7 +203,7 @@
       win.__blobioCellMassRefresh?.(initialSettings);
       return true;
     }
-    const SCRIPT_VERSION = "0.1.26";
+    const SCRIPT_VERSION = "0.1.27";
     const CELL_MASS_SNAPSHOT_KEY2 = "blobio.settings.cellMass.snapshot";
     const CELL_MASS_COOKIE_NAME2 = "blobioCellMass";
     const STORAGE_BRIDGE_SOURCE4 = "BlobioExtensionStorageBridge";
@@ -224,7 +230,9 @@
     const RADAR_ANCHOR_SPLIT_SMOOTHING = 0.14;
     const PLAYER_ARROW_CANVAS_ID = "blobio-visible-player-arrows";
     const PLAYER_ARROW_TOGGLE_ID = "blobio-visible-player-toggle";
+    const PLAYER_RADAR_MODE_TOGGLE_ID = "blobio-visible-player-radar-mode";
     const PLAYER_ANCHOR_TOGGLE_ID = "blobio-visible-player-anchor";
+    const RADAR_PLAYER_MODES = /* @__PURE__ */ new Set(["all", "friends"]);
     let settings = normalizeSettings2(initialSettings);
     let lastCacheSweep = 0;
     let arrowFrame = 0;
@@ -284,6 +292,8 @@
     win.__BlobioPlayerArrows = setPlayerArrowsEnabled;
     win.BlobioRadarAnchorName = setPlayerRadarAnchorName;
     win.__BlobioRadarAnchorName = setPlayerRadarAnchorName;
+    win.BlobioRadarMode = setPlayerRadarMode;
+    win.__BlobioRadarMode = setPlayerRadarMode;
     win.__blobioCellMassCaptureDraw = captureDrawState;
     if (win.__BLOBIO_CELL_MASS_TEST__) {
       win.__BlobioCellMassTestApi = {
@@ -465,6 +475,22 @@
       }
       return settings.radarAnchorName;
     }
+    function setPlayerRadarMode(mode = "") {
+      settings = normalizeSettings2({
+        ...settings,
+        radarPlayerMode: normalizeRadarPlayerMode2(mode)
+      });
+      state.settings = settings;
+      persistSettings();
+      updatePlayerRadarModeToggle();
+      if (settings.playerArrows) {
+        installPlayerArrowOverlay();
+      }
+      return settings.radarPlayerMode;
+    }
+    function togglePlayerRadarMode() {
+      return setPlayerRadarMode(settings.radarPlayerMode === "friends" ? "all" : "friends");
+    }
     function readMassText(cellId, mass, now2) {
       const key = String(cellId ?? `mass-${mass}`);
       const cached = labelCache.get(key);
@@ -612,6 +638,7 @@
       }
       installPlayerArrowStyle();
       ensurePlayerArrowToggle();
+      ensurePlayerRadarModeToggle();
       ensurePlayerAnchorToggle();
       const draw = () => {
         arrowFrame = win.requestAnimationFrame?.(draw) || 0;
@@ -651,7 +678,7 @@
       const rawAnchor = getRadarAnchor(freshPlayers, allPlayers, rect);
       const anchor = smoothRadarAnchor(rawAnchor, now2, rect);
       const anchorName = normalizeRadarAnchorName2(anchor.name);
-      const players = allPlayers.filter((player) => !player.own).filter((player) => normalizeRadarAnchorName2(player.name) !== anchorName).slice(0, 20);
+      const players = allPlayers.filter((player) => !player.own).filter((player) => normalizeRadarAnchorName2(player.name) !== anchorName).filter((player) => settings.radarPlayerMode !== "friends" || player.friend).slice(0, 20);
       const arrowRadius = clampNumber2(Math.min(rect.width, rect.height) * 0.18, 70, 150, 105);
       const centerX = clampNumber2(anchor.x, arrowRadius + 18, rect.width - arrowRadius - 18, rect.width / 2);
       const centerY = clampNumber2(anchor.y, arrowRadius + 18, rect.height - arrowRadius - 18, rect.height / 2);
@@ -668,6 +695,7 @@
         radius: roundNumber(arrowRadius),
         anchor,
         lockedAnchorName: settings.radarAnchorName,
+        playerMode: settings.radarPlayerMode,
         players: players.length,
         sourceCells: freshPlayers.length
       };
@@ -1075,10 +1103,10 @@
   color: rgba(255, 238, 166, 0.98);
 }
 
+#${PLAYER_RADAR_MODE_TOGGLE_ID},
 #${PLAYER_ANCHOR_TOGGLE_ID} {
   position: fixed;
   right: 14px;
-  top: 136px;
   z-index: 2147483001;
   max-width: 190px;
   height: 34px;
@@ -1094,6 +1122,19 @@
   cursor: pointer;
   font: 700 12px Arial, sans-serif;
   pointer-events: auto;
+}
+
+#${PLAYER_RADAR_MODE_TOGGLE_ID} {
+  top: 136px;
+}
+
+#${PLAYER_RADAR_MODE_TOGGLE_ID}[data-mode="friends"] {
+  border-color: rgba(80, 220, 130, 0.72);
+  color: rgba(172, 255, 202, 0.98);
+}
+
+#${PLAYER_ANCHOR_TOGGLE_ID} {
+  top: 176px;
 }
 
 #${PLAYER_ANCHOR_TOGGLE_ID}[data-locked="true"] {
@@ -1122,6 +1163,27 @@
         doc.body.appendChild(button);
       }
       updatePlayerArrowToggle(button);
+      return button;
+    }
+    function ensurePlayerRadarModeToggle() {
+      const doc = win.document;
+      if (!doc?.body) {
+        return null;
+      }
+      let button = doc.getElementById?.(PLAYER_RADAR_MODE_TOGGLE_ID);
+      if (!button) {
+        button = doc.createElement("button");
+        button.id = PLAYER_RADAR_MODE_TOGGLE_ID;
+        button.type = "button";
+        button.addEventListener?.("click", (event) => {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+          togglePlayerRadarMode();
+          button.blur?.();
+        });
+        doc.body.appendChild(button);
+      }
+      updatePlayerRadarModeToggle(button);
       return button;
     }
     function ensurePlayerAnchorToggle() {
@@ -1158,6 +1220,17 @@
       button.textContent = enabled ? "Arrows: ON" : "Arrows: OFF";
       button.setAttribute("aria-pressed", String(enabled));
       button.setAttribute("aria-label", enabled ? "Turn visible player arrows off" : "Turn visible player arrows on");
+    }
+    function updatePlayerRadarModeToggle(button = win.document?.getElementById?.(PLAYER_RADAR_MODE_TOGGLE_ID)) {
+      if (!button) {
+        return;
+      }
+      const mode = normalizeRadarPlayerMode2(settings.radarPlayerMode);
+      button.dataset.mode = mode;
+      button.textContent = mode === "friends" ? "Radar: Friends" : "Radar: All";
+      button.title = mode === "friends" ? "Radar only shows visible friends marked by Blobgame" : "Radar shows all visible players";
+      button.setAttribute("aria-pressed", String(mode === "friends"));
+      button.setAttribute("aria-label", mode === "friends" ? "Switch radar to all players" : "Switch radar to friends only");
     }
     function updatePlayerAnchorToggle(button = win.document?.getElementById?.(PLAYER_ANCHOR_TOGGLE_ID)) {
       if (!button) {
@@ -1358,7 +1431,9 @@
           "BlobioShowMassDebug()",
           "blobioCellMassDebug()",
           "BlobioVisiblePlayers()",
-          'BlobioRadarAnchorName("player name")'
+          'BlobioRadarAnchorName("player name")',
+          'BlobioRadarMode("all")',
+          'BlobioRadarMode("friends")'
         ],
         errors: state.errors.slice(-8)
       };
@@ -1382,6 +1457,7 @@
         nameGap: 1.2,
         updateDelayMs: 3e3,
         playerArrows: false,
+        radarPlayerMode: "all",
         radarAnchorName: "topg"
       };
       return {
@@ -1395,8 +1471,13 @@
         nameGap: clampNumber2(source.nameGap, 0.1, 3, defaults.nameGap),
         updateDelayMs: Math.round(clampNumber2(source.updateDelayMs, 0, 1e4, defaults.updateDelayMs)),
         playerArrows: source.playerArrows === void 0 ? defaults.playerArrows : Boolean(source.playerArrows),
+        radarPlayerMode: source.radarPlayerMode === void 0 ? defaults.radarPlayerMode : normalizeRadarPlayerMode2(source.radarPlayerMode),
         radarAnchorName: source.radarAnchorName === void 0 ? defaults.radarAnchorName : normalizeRadarAnchorName2(source.radarAnchorName)
       };
+    }
+    function normalizeRadarPlayerMode2(value) {
+      const mode = String(value || "").trim().toLowerCase();
+      return RADAR_PLAYER_MODES.has(mode) ? mode : "all";
     }
     function normalizeRadarAnchorName2(value) {
       return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -16224,7 +16305,7 @@ html.${className} .blobio-watermark-extension::after {
   var DEFAULT_CLASS_NAME2 = "blobio-menu-enabled";
   var DEFAULT_STYLE_ID2 = "blobio-menu-style";
   var DEFAULT_TOOLBAR_CLASS = "blobio-menu-toolbar";
-  var DEFAULT_EXTENSION_VERSION = "0.1.102";
+  var DEFAULT_EXTENSION_VERSION = "0.1.103";
   var HIDDEN_CLASS = "blobio-original-hidden";
   var PARTNER_LINK_MATCH = /iogames\.space|iogames\.live|io-games\.zone|silvergames\.com|crazygames\.com/i;
   var FAILED_VIRAL_FRAME_MATCH = /viral\.iogames\.space/i;
@@ -21859,7 +21940,7 @@ ${buildJellyGlsl(settings.noSkinCells)}`);
 
   // src/main.js
   var INSTANCE_KEY = "__blobioExtension";
-  var EXTENSION_VERSION = "0.1.102";
+  var EXTENSION_VERSION = "0.1.103";
   var VIP_BADGE_URL = "https://raw.githubusercontent.com/TOPG393/test-game/main/Blobgame.io-Extension-main/assets/VIP_icon_plus.png";
   var EMOTE_SKIN_ASSETS = {
     cool: emote_cool_default,
